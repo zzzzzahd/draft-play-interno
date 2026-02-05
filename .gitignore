@@ -1,0 +1,71 @@
+# Deletar o arquivo errado
+rm _gitignore
+
+# Criar o correto
+cat > .gitignore << 'EOF'
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+node_modules
+dist
+dist-ssr
+*.local
+
+# Editor directories and files
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# Environment variables
+.env
+.env.local
+.env.production.local
+.env.development.local
+.env.test.local
+EOF
+
+# Fazer commit
+git add .gitignore
+git commit -m "Add .gitignore"
+git push
+```
+
+---
+
+### Opção 3: Criar manualmente (Windows)
+
+Se estiver no Windows e não conseguir criar arquivo com ponto:
+
+1. Abra o **Bloco de Notas**
+2. Copie o conteúdo do `_gitignore`
+3. Salvar Como → **Todos os arquivos**
+4. Nome: `.gitignore` (com ponto)
+5. Salvar na raiz do projeto
+
+---
+
+## ✅ Checklist Atualizado:
+
+Agora você precisa de **2 arquivos na raiz**:
+
+1. **`.gitignore`** (renomeie o `_gitignore`)
+2. **`.env.local`** (baixe o que eu mandei - **NÃO vai pro GitHub**)
+```
+draft-play-app/
+├── .env.local       ← CRIAR (com suas credenciais Supabase)
+├── .gitignore       ← RENOMEAR de _gitignore
+├── package.json
+├── src/
+└── ...
