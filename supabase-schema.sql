@@ -203,7 +203,8 @@ CREATE TRIGGER set_baba_invite_code BEFORE INSERT ON public.babas
 
 -- =============================================
 -- INSERIR USUÁRIO MOCK PARA DESENVOLVIMENTO
+-- USANDO UUID VÁLIDO
 -- =============================================
 INSERT INTO public.users (id, name, email) VALUES
-  ('mock-user-id-001', 'Zharick Dias', 'zharickdiias@gmail.com')
+  ('00000000-0000-0000-0000-000000000001'::uuid, 'Zharick Dias', 'zharickdiias@gmail.com')
 ON CONFLICT (email) DO NOTHING;
