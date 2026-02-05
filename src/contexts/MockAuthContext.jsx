@@ -3,14 +3,14 @@ import React, { createContext, useContext } from 'react';
 const MockAuthContext = createContext();
 
 export const MockAuthProvider = ({ children }) => {
-  // Usuário fixo sempre autenticado
+  // Usuário fixo sempre autenticado com UUID válido
   const user = {
-    id: 'mock-user-id-001',
+    id: '00000000-0000-0000-0000-000000000001',
     email: 'zharickdiias@gmail.com',
   };
 
   const profile = {
-    id: 'mock-user-id-001',
+    id: '00000000-0000-0000-0000-000000000001',
     name: 'Zharick Dias',
     email: 'zharickdiias@gmail.com',
     avatar_url: null,
