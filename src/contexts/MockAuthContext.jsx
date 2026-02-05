@@ -15,6 +15,9 @@ export const MockAuthProvider = ({ children }) => {
     email: 'zharickdiias@gmail.com',
     avatar_url: null,
     phone: null,
+    age: 28,
+    position: 'meio-campo',
+    favorite_team: 'Flamengo',
   };
 
   // Sempre autenticado
