@@ -302,13 +302,6 @@ const HomePage = () => {
                         <Clock size={12} />
                         <span>{baba.game_time}</span>
                       </div>
-
-                      {baba.invite_code && (
-                        <div className="mt-3 pt-3 border-t border-white/10">
-                          <p className="text-[9px] text-white/40 uppercase tracking-widest">Código</p>
-                          <p className="text-sm font-black text-cyan-electric tracking-widest">{baba.invite_code}</p>
-                        </div>
-                      )}
                     </div>
                   </button>
                 ))}
