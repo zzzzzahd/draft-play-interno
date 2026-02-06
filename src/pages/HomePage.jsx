@@ -29,6 +29,11 @@ const HomePage = () => {
       return;
     }
 
+    if (formData.game_days.length === 0) {
+      toast.error('Selecione pelo menos um dia da semana');
+      return;
+    }
+
     const result = await createBaba({
       name: formData.name,
       modality: formData.modality,
@@ -195,6 +200,52 @@ const HomePage = () => {
                     className="input-tactical"
                   />
                 </div>
+
+                {/* ⭐ NOVO: Seleção de Dias da Semana */}
+                <div>
+                  <label className="block text-[10px] font-black uppercase tracking-widest text-white/40 mb-3">
+                    Dias da Semana
+                  </label>
+                  <div className="grid grid-cols-4 sm:grid-cols-7 gap-2">
+                    {[
+                      { day: 0, label: 'DOM' },
+                      { day: 1, label: 'SEG' },
+                      { day: 2, label: 'TER' },
+                      { day: 3, label: 'QUA' },
+                      { day: 4, label: 'QUI' },
+                      { day: 5, label: 'SEX' },
+                      { day: 6, label: 'SÁB' },
+                    ].map(({ day, label }) => (
+                      <button
+                        key={day}
+                        type="button"
+                        onClick={() => {
+                          const newDays = formData.game_days.includes(day)
+                            ? formData.game_days.filter(d => d !== day)
+                            : [...formData.game_days, day].sort((a, b) => a - b);
+                          setFormData({ ...formData, game_days: newDays });
+                        }}
+                        className={`py-3 rounded-xl font-black text-[10px] uppercase tracking-wider transition-all ${
+                          formData.game_days.includes(day)
+                            ? 'bg-cyan-electric text-black border-2 border-cyan-electric shadow-[0_0_15px_rgba(0,242,255,0.4)]'
+                            : 'bg-white/5 text-white/40 border-2 border-white/10 hover:bg-white/10 hover:text-white/60'
+                        }`}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                  {formData.game_days.length === 0 && (
+                    <p className="text-[9px] text-yellow-500 mt-2 flex items-center gap-1">
+                      <span>⚠️</span> Selecione pelo menos um dia
+                    </p>
+                  )}
+                  {formData.game_days.length > 0 && (
+                    <p className="text-[9px] text-cyan-electric mt-2">
+                      ✓ {formData.game_days.length} dia{formData.game_days.length > 1 ? 's' : ''} selecionado{formData.game_days.length > 1 ? 's' : ''}
+                    </p>
+                  )}
+                </div>
               </div>
             </div>
 
@@ -302,6 +353,23 @@ const HomePage = () => {
                         <Clock size={12} />
                         <span>{baba.game_time}</span>
                       </div>
+
+                      {/* ⭐ NOVO: Dias da Semana */}
+                      {baba.game_days && baba.game_days.length > 0 && (
+                        <div className="flex flex-wrap gap-1 mt-2">
+                          {baba.game_days.sort((a, b) => a - b).map((day) => {
+                            const dayLabels = ['D', 'S', 'T', 'Q', 'Q', 'S', 'S'];
+                            return (
+                              <span 
+                                key={day}
+                                className="w-6 h-6 rounded-md bg-cyan-electric/20 border border-cyan-electric/30 text-cyan-electric text-[8px] font-black flex items-center justify-center"
+                              >
+                                {dayLabels[day]}
+                              </span>
+                            );
+                          })}
+                        </div>
+                      )}
                     </div>
                   </button>
                 ))}
