@@ -3,27 +3,17 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/MockAuthContext';
 import { useBaba } from '../contexts/BabaContext';
 import { 
-  Trophy, Users, DollarSign, Settings, LogOut, 
-  Play, ShieldCheck, Calendar, PlusCircle,
-  Star, CheckCircle2
+  Trophy, Users, DollarSign, LogOut, 
+  ShieldCheck, Calendar, PlusCircle, Star
 } from 'lucide-react';
-import toast from 'react-hot-toast';
+import PresenceConfirmation from '../components/PresenceConfirmation';
 
 const DashboardPage = () => {
   const navigate = useNavigate();
   const { profile, signOut } = useAuth();
-  const { myBabas, currentBaba, setCurrentBaba, players, drawTeams, loading } = useBaba();
+  const { myBabas, currentBaba, setCurrentBaba, players, loading } = useBaba();
   
-  const [activeTab, setActiveTab] = useState('overview'); 
-  const [isDrawModalOpen, setIsDrawModalOpen] = useState(false);
-  const [selectedPlayers, setSelectedPlayers] = useState([]);
-
-  // Sincroniza jogadores selecionados
-  React.useEffect(() => {
-    if (players) {
-      setSelectedPlayers(players.map(p => p.id));
-    }
-  }, [players]);
+  const [activeTab, setActiveTab] = useState('overview');
 
   if (loading) {
     return (
@@ -33,23 +23,6 @@ const DashboardPage = () => {
       </div>
     );
   }
-
-  const handleTogglePlayer = (id) => {
-    setSelectedPlayers(prev => 
-      prev.includes(id) ? prev.filter(p => p !== id) : [...prev, id]
-    );
-  };
-
-  const handleStartDraw = () => {
-    const available = players.filter(p => selectedPlayers.includes(p.id));
-    if (available.length < 2) {
-      toast.error("Selecione pelo menos 2 atletas!");
-      return;
-    }
-    drawTeams(available);
-    setIsDrawModalOpen(false);
-    navigate('/match');
-  };
 
   return (
     <div className="min-h-screen bg-black text-white pb-24 font-sans">
@@ -124,6 +97,7 @@ const DashboardPage = () => {
             <div className="space-y-6">
               {activeTab === 'overview' && (
                 <div className="space-y-6 animate-in fade-in duration-500">
+                  {/* Cards de Info */}
                   <div className="grid grid-cols-2 gap-4">
                     <div className="card-glass p-6 rounded-3xl border border-white/5 bg-white/5">
                       <p className="text-[9px] font-black opacity-40 uppercase mb-2">Horário</p>
@@ -141,13 +115,10 @@ const DashboardPage = () => {
                     </div>
                   </div>
 
-                  <button 
-                    onClick={() => setIsDrawModalOpen(true)}
-                    className="w-full py-6 rounded-[2rem] bg-gradient-to-r from-cyan-electric to-blue-600 text-black font-black uppercase italic tracking-tighter flex items-center justify-center gap-3 shadow-[0_10px_40px_rgba(0,255,242,0.2)] hover:scale-[1.02] active:scale-95 transition-all"
-                  >
-                    <Play fill="black" size={20} /> Iniciar Sorteio de Times
-                  </button>
+                  {/* ⭐ NOVO: Componente de Confirmação de Presença */}
+                  <PresenceConfirmation />
 
+                  {/* Grid de Atalhos */}
                   <div className="grid grid-cols-3 gap-4">
                     {[
                       { icon: <Trophy size={20} />, label: 'Ranking', path: '/rankings' },
@@ -196,44 +167,6 @@ const DashboardPage = () => {
           </div>
         )}
       </div>
-
-      {/* MODAL DE SORTEIO */}
-      {isDrawModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4 bg-black/95 backdrop-blur-md">
-          <div className="w-full max-w-lg bg-[#0a0a0a] border border-cyan-electric/20 rounded-[2.5rem] overflow-hidden shadow-2xl">
-            <div className="p-8 border-b border-white/5 flex justify-between items-center">
-              <div>
-                <h3 className="text-2xl font-black italic uppercase tracking-tighter">Sorteio Rápido</h3>
-                <p className="text-[10px] font-black uppercase text-cyan-electric tracking-widest">Convoque os atletas</p>
-              </div>
-              <div className="bg-cyan-electric text-black px-4 py-2 rounded-xl font-black">
-                {selectedPlayers.length}
-              </div>
-            </div>
-            
-            <div className="max-h-[40vh] overflow-y-auto p-6 grid grid-cols-1 gap-2">
-              {players.map(player => (
-                <button
-                  key={player.id}
-                  onClick={() => handleTogglePlayer(player.id)}
-                  className={`flex items-center justify-between p-4 rounded-2xl transition-all ${selectedPlayers.includes(player.id) ? 'bg-cyan-electric/10 border border-cyan-electric/40' : 'bg-white/5 border border-transparent'}`}
-                >
-                  <div className="flex items-center gap-3">
-                    <div className={`w-2 h-2 rounded-full ${player.position === 'goleiro' ? 'bg-yellow-400' : 'bg-blue-400'}`}></div>
-                    <span className="text-sm font-bold uppercase">{player.name}</span>
-                  </div>
-                  {selectedPlayers.includes(player.id) && <CheckCircle2 className="text-cyan-electric" size={18} />}
-                </button>
-              ))}
-            </div>
-
-            <div className="p-8 flex gap-3">
-              <button onClick={() => setIsDrawModalOpen(false)} className="flex-1 py-5 rounded-2xl bg-white/5 font-black uppercase text-[10px] tracking-widest">Cancelar</button>
-              <button onClick={handleStartDraw} className="flex-[2] py-5 rounded-2xl bg-cyan-electric text-black font-black uppercase text-[10px] tracking-widest shadow-neon-cyan">Confirmar Sorteio</button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 };
