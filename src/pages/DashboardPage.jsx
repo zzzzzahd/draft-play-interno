@@ -6,6 +6,7 @@ import {
   Trophy, Users, DollarSign, LogOut, 
   ShieldCheck, Calendar, PlusCircle, Star, Edit, Copy
 } from 'lucide-react';
+import PresenceConfirmation from '../components/PresenceConfirmation';
 import toast from 'react-hot-toast';
 
 const DashboardPage = () => {
@@ -149,6 +150,9 @@ const DashboardPage = () => {
                       </div>
                     </div>
                   </div>
+
+                  {/* ⭐ NOVO: Componente de Confirmação de Presença */}
+                  <PresenceConfirmation />
 
                   {/* Código de Convite - Só para Presidente */}
                   {isPresident && currentBaba.invite_code && (
