@@ -83,14 +83,36 @@ export const BabaProvider = ({ children }) => {
     }
   };
 
-  // ⭐ VERIFICAR DEADLINE (CORRIGIDO!)
-  const checkDeadline = (baba, gameDate) => {
+  // ⭐ FUNÇÃO AUXILIAR: Verificar se hoje é dia de jogo
+  const isTodayGameDay = (baba) => {
+    if (!baba?.game_days || baba.game_days.length === 0) {
+      // Se não tiver dias configurados, assume que joga todo dia
+      return true;
+    }
+
+    const today = new Date();
+    const dayOfWeek = today.getDay(); // 0 = Domingo, 1 = Segunda, ..., 6 = Sábado
+    
+    return baba.game_days.includes(dayOfWeek);
+  };
+
+  // ⭐ VERIFICAR DEADLINE (CORRIGIDO COM DIA DA SEMANA!)
+  const checkDeadline = (baba) => {
     if (!baba?.game_time) {
       setCanConfirm(false);
+      setConfirmationDeadline(null);
       return false;
     }
 
     try {
+      // Verificar se hoje é dia de jogo
+      if (!isTodayGameDay(baba)) {
+        console.log('🔍 Hoje NÃO é dia de jogo');
+        setCanConfirm(false);
+        setConfirmationDeadline(null);
+        return false;
+      }
+
       // Obter a data de hoje no formato YYYY-MM-DD
       const today = new Date();
       const year = today.getFullYear();
@@ -112,6 +134,9 @@ export const BabaProvider = ({ children }) => {
       const canStillConfirm = now < deadline;
       
       console.log('🔍 DEBUG DEADLINE:', {
+        isDayGame: isTodayGameDay(baba),
+        gameDays: baba.game_days,
+        todayDayOfWeek: new Date().getDay(),
         todayString,
         gameTimeString,
         gameDateTime: gameDateTime.toLocaleString('pt-BR'),
@@ -127,6 +152,7 @@ export const BabaProvider = ({ children }) => {
     } catch (error) {
       console.error('Error checking deadline:', error);
       setCanConfirm(false);
+      setConfirmationDeadline(null);
       return false;
     }
   };
@@ -144,12 +170,19 @@ export const BabaProvider = ({ children }) => {
         return false;
       }
 
+      // Verificar se hoje é dia de jogo
+      if (!isTodayGameDay(currentBaba)) {
+        toast.error('Hoje não é dia de jogo');
+        return false;
+      }
+
       // Verificar deadline
-      const today = new Date().toISOString().split('T')[0];
-      if (!checkDeadline(currentBaba, today)) {
+      if (!checkDeadline(currentBaba)) {
         toast.error('Prazo de confirmação encerrado');
         return false;
       }
+
+      const today = new Date().toISOString().split('T')[0];
 
       // Inserir confirmação
       const { data, error } = await supabase
@@ -196,8 +229,7 @@ export const BabaProvider = ({ children }) => {
       }
 
       // Verificar deadline
-      const today = new Date().toISOString().split('T')[0];
-      if (!checkDeadline(currentBaba, today)) {
+      if (!checkDeadline(currentBaba)) {
         toast.error('Prazo de confirmação encerrado');
         return false;
       }
@@ -211,6 +243,7 @@ export const BabaProvider = ({ children }) => {
       if (error) throw error;
 
       toast.success('Confirmação cancelada');
+      const today = new Date().toISOString().split('T')[0];
       await loadConfirmations(currentBaba.id, today);
       return true;
       
@@ -326,9 +359,18 @@ export const BabaProvider = ({ children }) => {
   // ⭐ Efeito para carregar confirmações do dia
   useEffect(() => {
     if (currentBaba && players.length > 0) {
-      const today = new Date().toISOString().split('T')[0];
-      loadConfirmations(currentBaba.id, today);
-      checkDeadline(currentBaba, today);
+      // Só verifica se hoje é dia de jogo
+      if (isTodayGameDay(currentBaba)) {
+        const today = new Date().toISOString().split('T')[0];
+        loadConfirmations(currentBaba.id, today);
+        checkDeadline(currentBaba);
+      } else {
+        // Não é dia de jogo
+        setGameConfirmations([]);
+        setMyConfirmation(null);
+        setCanConfirm(false);
+        setConfirmationDeadline(null);
+      }
     }
   }, [currentBaba, players]);
 
@@ -338,8 +380,9 @@ export const BabaProvider = ({ children }) => {
 
     // Verificar a cada 1 minuto
     const interval = setInterval(() => {
-      const today = new Date().toISOString().split('T')[0];
-      checkDeadline(currentBaba, today);
+      if (isTodayGameDay(currentBaba)) {
+        checkDeadline(currentBaba);
+      }
     }, 60000); // 60 segundos
 
     return () => clearInterval(interval);
@@ -366,6 +409,7 @@ export const BabaProvider = ({ children }) => {
       confirmPresence,
       cancelConfirmation,
       loadConfirmations,
+      isTodayGameDay, // Exportar para uso externo se necessário
     }}>
       {children}
     </BabaContext.Provider>
