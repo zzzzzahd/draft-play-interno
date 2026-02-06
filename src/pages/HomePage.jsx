@@ -2,13 +2,13 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useBaba } from '../contexts/BabaContext';
 import { useAuth } from '../contexts/MockAuthContext';
-import { PlusCircle, LogIn, Trophy, Users, Edit } from 'lucide-react';
+import { PlusCircle, LogIn, Trophy, Users, Edit, Clock, MapPin } from 'lucide-react';
 import Logo from '../components/Logo';
 import toast from 'react-hot-toast';
 
 const HomePage = () => {
   const navigate = useNavigate();
-  const { createBaba, joinBaba, loading } = useBaba();
+  const { myBabas, createBaba, joinBaba, setCurrentBaba, loading } = useBaba();
   const { profile } = useAuth();
   
   const [mode, setMode] = useState(null); // 'create' ou 'join'
@@ -38,7 +38,8 @@ const HomePage = () => {
     });
 
     if (result) {
-      navigate('/dashboard');
+      setMode(null); // Volta para tela inicial
+      toast.success('Baba criado! Clique nele abaixo para acessar.');
     }
   };
 
@@ -53,8 +54,13 @@ const HomePage = () => {
     const result = await joinBaba(formData.invite_code);
 
     if (result) {
-      navigate('/dashboard');
+      setMode(null); // Volta para tela inicial
     }
+  };
+
+  const handleSelectBaba = (baba) => {
+    setCurrentBaba(baba);
+    navigate('/dashboard');
   };
 
   if (loading) {
@@ -67,10 +73,12 @@ const HomePage = () => {
   }
 
   return (
-    <div className="min-h-screen bg-black text-white flex flex-col items-center justify-center p-6">
-      <div className="w-full max-w-md space-y-8">
+    <div className="min-h-screen bg-black text-white p-6">
+      <div className="w-full max-w-4xl mx-auto space-y-8">
         {/* Logo */}
-        <Logo size="large" />
+        <div className="flex justify-center">
+          <Logo size="large" />
+        </div>
 
         {/* Cabeçalho do Perfil */}
         <div className="card-glass p-6 rounded-[2rem] animate-fade-in">
@@ -111,27 +119,30 @@ const HomePage = () => {
           </div>
         </div>
 
+        {/* Botões: Criar e Entrar */}
         {mode === null && (
           <div className="space-y-4 animate-fade-in">
             <p className="text-center text-white/60 text-sm font-tactical">
               Escolha uma opção para começar
             </p>
 
-            <button
-              onClick={() => setMode('create')}
-              className="w-full p-6 rounded-[2rem] bg-gradient-to-r from-cyan-electric to-blue-600 text-black font-black uppercase italic tracking-tighter flex items-center justify-center gap-3 shadow-[0_10px_40px_rgba(0,255,242,0.2)] hover:scale-[1.02] active:scale-95 transition-all"
-            >
-              <PlusCircle size={24} />
-              Criar Novo Baba
-            </button>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <button
+                onClick={() => setMode('create')}
+                className="p-6 rounded-[2rem] bg-gradient-to-r from-cyan-electric to-blue-600 text-black font-black uppercase italic tracking-tighter flex items-center justify-center gap-3 shadow-[0_10px_40px_rgba(0,255,242,0.2)] hover:scale-[1.02] active:scale-95 transition-all"
+              >
+                <PlusCircle size={24} />
+                Criar Novo Baba
+              </button>
 
-            <button
-              onClick={() => setMode('join')}
-              className="w-full p-6 rounded-[2rem] bg-white/5 border border-green-neon text-green-neon font-black uppercase italic tracking-tighter flex items-center justify-center gap-3 hover:bg-green-neon/10 transition-all"
-            >
-              <LogIn size={24} />
-              Entrar em um Baba
-            </button>
+              <button
+                onClick={() => setMode('join')}
+                className="p-6 rounded-[2rem] bg-white/5 border border-green-neon text-green-neon font-black uppercase italic tracking-tighter flex items-center justify-center gap-3 hover:bg-green-neon/10 transition-all"
+              >
+                <LogIn size={24} />
+                Entrar com Convite
+              </button>
+            </div>
           </div>
         )}
 
@@ -253,6 +264,73 @@ const HomePage = () => {
               </button>
             </div>
           </form>
+        )}
+
+        {/* Seção: Meus Babas */}
+        {mode === null && (
+          <div className="space-y-4 animate-fade-in">
+            <div className="flex items-center gap-3">
+              <div className="h-[2px] flex-1 bg-gradient-to-r from-transparent via-cyan-electric/30 to-transparent"></div>
+              <h2 className="text-xl font-black uppercase italic text-cyan-electric">
+                Meus Babas
+              </h2>
+              <div className="h-[2px] flex-1 bg-gradient-to-r from-transparent via-cyan-electric/30 to-transparent"></div>
+            </div>
+
+            {myBabas && myBabas.length > 0 ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {myBabas.map((baba) => (
+                  <button
+                    key={baba.id}
+                    onClick={() => handleSelectBaba(baba)}
+                    className="card-glass p-6 rounded-[2rem] hover:border-cyan-electric/50 transition-all group text-left"
+                  >
+                    <div className="flex items-start justify-between mb-3">
+                      <h3 className="text-lg font-black uppercase italic text-white group-hover:text-cyan-electric transition-colors">
+                        {baba.name}
+                      </h3>
+                      <div className="w-2 h-2 rounded-full bg-green-neon animate-pulse"></div>
+                    </div>
+
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-wider text-white/60">
+                        <MapPin size={12} />
+                        <span>{baba.modality === 'futsal' ? 'Futsal' : 'Society'}</span>
+                      </div>
+
+                      <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-wider text-white/60">
+                        <Clock size={12} />
+                        <span>{baba.game_time}</span>
+                      </div>
+
+                      {baba.invite_code && (
+                        <div className="mt-3 pt-3 border-t border-white/10">
+                          <p className="text-[9px] text-white/40 uppercase tracking-widest">Código</p>
+                          <p className="text-sm font-black text-cyan-electric tracking-widest">{baba.invite_code}</p>
+                        </div>
+                      )}
+                    </div>
+                  </button>
+                ))}
+              </div>
+            ) : (
+              <div className="card-glass p-12 rounded-[2rem] text-center">
+                <div className="flex flex-col items-center gap-4">
+                  <div className="w-16 h-16 rounded-full bg-white/5 flex items-center justify-center">
+                    <Trophy size={32} className="text-white/20" />
+                  </div>
+                  <div>
+                    <p className="text-lg font-black uppercase text-white/40 mb-2">
+                      Nenhum Baba Ainda
+                    </p>
+                    <p className="text-sm text-white/30">
+                      Crie um novo baba ou entre com código de convite
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
         )}
       </div>
     </div>
