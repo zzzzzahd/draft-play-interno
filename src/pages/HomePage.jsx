@@ -1,13 +1,15 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useBaba } from '../contexts/BabaContext';
-import { PlusCircle, LogIn, Trophy, Users } from 'lucide-react';
+import { useAuth } from '../contexts/MockAuthContext';
+import { PlusCircle, LogIn, Trophy, Users, Edit } from 'lucide-react';
 import Logo from '../components/Logo';
 import toast from 'react-hot-toast';
 
 const HomePage = () => {
   const navigate = useNavigate();
   const { createBaba, joinBaba, loading } = useBaba();
+  const { profile } = useAuth();
   
   const [mode, setMode] = useState(null); // 'create' ou 'join'
   const [formData, setFormData] = useState({
@@ -69,6 +71,45 @@ const HomePage = () => {
       <div className="w-full max-w-md space-y-8">
         {/* Logo */}
         <Logo size="large" />
+
+        {/* Cabeçalho do Perfil */}
+        <div className="card-glass p-6 rounded-[2rem] animate-fade-in">
+          <div className="flex items-center gap-4">
+            {/* Círculo com Inicial */}
+            <div className="w-16 h-16 rounded-full bg-gradient-to-br from-cyan-electric to-blue-600 flex items-center justify-center flex-shrink-0 shadow-[0_0_20px_rgba(0,242,255,0.3)]">
+              <span className="text-2xl font-black text-black">
+                {profile?.name?.charAt(0).toUpperCase() || 'U'}
+              </span>
+            </div>
+
+            {/* Informações do Perfil */}
+            <div className="flex-1 min-w-0">
+              <h2 className="text-xl font-black uppercase italic text-white truncate">
+                {profile?.name || 'Usuário'}
+              </h2>
+              
+              {/* Badge com Idade | Posição | Time */}
+              {(profile?.age || profile?.position || profile?.favorite_team) && (
+                <div className="flex items-center gap-2 mt-1 text-[10px] font-black uppercase tracking-wider text-white/60 flex-wrap">
+                  {profile?.age && <span>{profile.age} anos</span>}
+                  {profile?.age && profile?.position && <span>•</span>}
+                  {profile?.position && <span>{profile.position}</span>}
+                  {(profile?.age || profile?.position) && profile?.favorite_team && <span>•</span>}
+                  {profile?.favorite_team && <span className="truncate max-w-[100px]">{profile.favorite_team}</span>}
+                </div>
+              )}
+            </div>
+
+            {/* Botão Editar Perfil */}
+            <button
+              onClick={() => navigate('/profile')}
+              className="px-4 py-2 rounded-xl bg-white/5 border border-cyan-electric/30 text-cyan-electric text-[10px] font-black uppercase tracking-widest hover:bg-cyan-electric/10 hover:border-cyan-electric transition-all flex items-center gap-2 flex-shrink-0"
+            >
+              <Edit size={14} />
+              <span className="hidden sm:inline">Editar</span>
+            </button>
+          </div>
+        </div>
 
         {mode === null && (
           <div className="space-y-4 animate-fade-in">
