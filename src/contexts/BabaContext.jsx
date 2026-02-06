@@ -6,18 +6,18 @@ import toast from 'react-hot-toast';
 const BabaContext = createContext();
 
 export const BabaProvider = ({ children }) => {
-  const { user, profile } = useAuth();
+  const { user } = useAuth();
   const [myBabas, setMyBabas] = useState([]);
   const [currentBaba, setCurrentBaba] = useState(null);
   const [players, setPlayers] = useState([]);
   const [matches, setMatches] = useState([]);
   const [loading, setLoading] = useState(true);
-  
-  // Estados de confirmação de presença
+
+  // ⭐ ESTADOS - Confirmações
   const [gameConfirmations, setGameConfirmations] = useState([]);
   const [myConfirmation, setMyConfirmation] = useState(null);
-  const [confirmationDeadline, setConfirmationDeadline] = useState(null);
   const [canConfirm, setCanConfirm] = useState(false);
+  const [confirmationDeadline, setConfirmationDeadline] = useState(null);
 
   // Carregar babas do usuário
   const loadMyBabas = async () => {
@@ -56,112 +56,153 @@ export const BabaProvider = ({ children }) => {
     }
   };
 
-  // Calcular deadline de confirmação (30min antes do jogo)
-  const calculateDeadline = (gameTime) => {
-    if (!gameTime) return null;
-    
-    const now = new Date();
-    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    
-    // Parse game_time (formato HH:MM ou HH:MM:SS)
-    const [hours, minutes] = gameTime.split(':').map(Number);
-    
-    // Criar data/hora do jogo hoje
-    const gameDateTime = new Date(today);
-    gameDateTime.setHours(hours, minutes, 0, 0);
-    
-    // Deadline = 30 minutos antes do jogo
-    const deadline = new Date(gameDateTime.getTime() - 30 * 60 * 1000);
-    
-    return deadline;
-  };
-
-  // Carregar confirmações do jogo de hoje
-  const loadGameConfirmations = async (babaId) => {
+  // ⭐ CARREGAR CONFIRMAÇÕES DO DIA
+  const loadConfirmations = async (babaId, gameDate) => {
     try {
-      const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
-      
       const { data, error } = await supabase
         .from('game_confirmations')
         .select(`
           *,
-          player:players(*)
+          player:players(id, name, position)
         `)
         .eq('baba_id', babaId)
-        .eq('game_date', today);
+        .eq('game_date', gameDate)
+        .eq('confirmed', true);
 
       if (error) throw error;
       
       setGameConfirmations(data || []);
       
-      // Verificar se o usuário atual confirmou
-      const myPlayer = players.find(p => p.user_id === user.id);
-      if (myPlayer) {
-        const myConf = data?.find(c => c.player_id === myPlayer.id);
-        setMyConfirmation(myConf || null);
-      }
+      // Verificar se usuário já confirmou
+      const userPlayer = players.find(p => p.user_id === user.id);
+      const userConfirmation = data?.find(c => c.player_id === userPlayer?.id);
+      setMyConfirmation(userConfirmation || null);
+      
     } catch (error) {
       console.error('Error loading confirmations:', error);
     }
   };
 
-  // Confirmar presença
+  // ⭐ VERIFICAR DEADLINE (CORRIGIDO!)
+  const checkDeadline = (baba, gameDate) => {
+    if (!baba?.game_time) {
+      setCanConfirm(false);
+      return false;
+    }
+
+    try {
+      // Obter a data de hoje no formato YYYY-MM-DD
+      const today = new Date();
+      const year = today.getFullYear();
+      const month = String(today.getMonth() + 1).padStart(2, '0');
+      const day = String(today.getDate()).padStart(2, '0');
+      const todayString = `${year}-${month}-${day}`;
+
+      // Construir datetime do jogo usando a data de HOJE
+      const gameTimeString = baba.game_time.substring(0, 5); // HH:MM
+      const gameDateTime = new Date(`${todayString}T${gameTimeString}:00`);
+      
+      // Calcular deadline (30 minutos antes)
+      const deadline = new Date(gameDateTime.getTime() - 30 * 60 * 1000);
+      
+      // Horário atual
+      const now = new Date();
+      
+      // Pode confirmar se ainda não passou o deadline
+      const canStillConfirm = now < deadline;
+      
+      console.log('🔍 DEBUG DEADLINE:', {
+        todayString,
+        gameTimeString,
+        gameDateTime: gameDateTime.toLocaleString('pt-BR'),
+        deadline: deadline.toLocaleString('pt-BR'),
+        now: now.toLocaleString('pt-BR'),
+        canStillConfirm
+      });
+      
+      setCanConfirm(canStillConfirm);
+      setConfirmationDeadline(deadline);
+      
+      return canStillConfirm;
+    } catch (error) {
+      console.error('Error checking deadline:', error);
+      setCanConfirm(false);
+      return false;
+    }
+  };
+
+  // ⭐ CONFIRMAR PRESENÇA
   const confirmPresence = async () => {
     try {
       setLoading(true);
+
+      // Buscar player do usuário atual
+      const userPlayer = players.find(p => p.user_id === user.id);
       
-      // Encontrar o player do usuário atual
-      const myPlayer = players.find(p => p.user_id === user.id);
-      if (!myPlayer) {
-        toast.error('Você não está registrado neste baba');
-        return;
+      if (!userPlayer) {
+        toast.error('Você não está cadastrado neste baba');
+        return false;
       }
 
+      // Verificar deadline
       const today = new Date().toISOString().split('T')[0];
-      
+      if (!checkDeadline(currentBaba, today)) {
+        toast.error('Prazo de confirmação encerrado');
+        return false;
+      }
+
+      // Inserir confirmação
       const { data, error } = await supabase
         .from('game_confirmations')
         .insert([{
           baba_id: currentBaba.id,
-          player_id: myPlayer.id,
+          player_id: userPlayer.id,
           game_date: today,
+          confirmed: true
         }])
-        .select(`
-          *,
-          player:players(*)
-        `)
+        .select()
         .single();
 
       if (error) {
         if (error.code === '23505') {
-          toast.error('Você já confirmou presença!');
+          toast.error('Você já confirmou presença');
         } else {
           throw error;
         }
-        return;
+        return false;
       }
 
       toast.success('Presença confirmada!');
-      setMyConfirmation(data);
-      await loadGameConfirmations(currentBaba.id);
+      await loadConfirmations(currentBaba.id, today);
+      return true;
+      
     } catch (error) {
       console.error('Error confirming presence:', error);
       toast.error('Erro ao confirmar presença');
+      return false;
     } finally {
       setLoading(false);
     }
   };
 
-  // Cancelar confirmação
+  // ⭐ CANCELAR CONFIRMAÇÃO
   const cancelConfirmation = async () => {
     try {
       setLoading(true);
-      
+
       if (!myConfirmation) {
-        toast.error('Você não confirmou presença');
-        return;
+        toast.error('Você não tem confirmação para cancelar');
+        return false;
       }
 
+      // Verificar deadline
+      const today = new Date().toISOString().split('T')[0];
+      if (!checkDeadline(currentBaba, today)) {
+        toast.error('Prazo de confirmação encerrado');
+        return false;
+      }
+
+      // Deletar confirmação
       const { error } = await supabase
         .from('game_confirmations')
         .delete()
@@ -170,11 +211,13 @@ export const BabaProvider = ({ children }) => {
       if (error) throw error;
 
       toast.success('Confirmação cancelada');
-      setMyConfirmation(null);
-      await loadGameConfirmations(currentBaba.id);
+      await loadConfirmations(currentBaba.id, today);
+      return true;
+      
     } catch (error) {
       console.error('Error canceling confirmation:', error);
       toast.error('Erro ao cancelar confirmação');
+      return false;
     } finally {
       setLoading(false);
     }
@@ -228,7 +271,7 @@ export const BabaProvider = ({ children }) => {
         .insert([{
           baba_id: baba.id,
           user_id: user.id,
-          name: profile?.name || 'Jogador',
+          name: user.profile?.name || 'Jogador',
           position: 'linha',
         }]);
 
@@ -280,34 +323,27 @@ export const BabaProvider = ({ children }) => {
     }
   }, [currentBaba]);
 
-  // Efeito para carregar confirmações e calcular deadline
+  // ⭐ Efeito para carregar confirmações do dia
   useEffect(() => {
     if (currentBaba && players.length > 0) {
-      loadGameConfirmations(currentBaba.id);
-      
-      // Calcular deadline
-      const deadline = calculateDeadline(currentBaba.game_time);
-      setConfirmationDeadline(deadline);
-      
-      // Verificar se ainda pode confirmar
-      if (deadline) {
-        const now = new Date();
-        setCanConfirm(now < deadline);
-      }
+      const today = new Date().toISOString().split('T')[0];
+      loadConfirmations(currentBaba.id, today);
+      checkDeadline(currentBaba, today);
     }
   }, [currentBaba, players]);
 
-  // Atualizar canConfirm a cada minuto
+  // ⭐ Efeito para verificar deadline a cada 1 minuto
   useEffect(() => {
-    if (!confirmationDeadline) return;
+    if (!currentBaba) return;
 
+    // Verificar a cada 1 minuto
     const interval = setInterval(() => {
-      const now = new Date();
-      setCanConfirm(now < confirmationDeadline);
-    }, 60000); // Atualiza a cada 1 minuto
+      const today = new Date().toISOString().split('T')[0];
+      checkDeadline(currentBaba, today);
+    }, 60000); // 60 segundos
 
     return () => clearInterval(interval);
-  }, [confirmationDeadline]);
+  }, [currentBaba]);
 
   return (
     <BabaContext.Provider value={{
@@ -321,13 +357,15 @@ export const BabaProvider = ({ children }) => {
       joinBaba,
       loadMyBabas,
       drawTeams,
-      // Confirmação de presença
+      
+      // ⭐ NOVOS VALORES - Confirmações
       gameConfirmations,
       myConfirmation,
       canConfirm,
       confirmationDeadline,
       confirmPresence,
       cancelConfirmation,
+      loadConfirmations,
     }}>
       {children}
     </BabaContext.Provider>
