@@ -470,6 +470,68 @@ export const BabaProvider = ({ children }) => {
     return { teamA, teamB };
   };
 
+  // ⭐ NOVO: Atualizar baba
+  const updateBaba = async (babaId, updates) => {
+    try {
+      setLoading(true);
+
+      const { data, error } = await supabase
+        .from('babas')
+        .update(updates)
+        .eq('id', babaId)
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      toast.success('Baba atualizado com sucesso!');
+      await loadMyBabas();
+      
+      // Se estiver atualizando o baba atual, atualizar estado
+      if (currentBaba?.id === babaId) {
+        setCurrentBaba(data);
+      }
+      
+      return data;
+    } catch (error) {
+      console.error('Error updating baba:', error);
+      toast.error('Erro ao atualizar baba');
+      return null;
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // ⭐ NOVO: Deletar baba
+  const deleteBaba = async (babaId) => {
+    try {
+      setLoading(true);
+
+      const { error } = await supabase
+        .from('babas')
+        .delete()
+        .eq('id', babaId);
+
+      if (error) throw error;
+
+      toast.success('Baba excluído com sucesso!');
+      
+      // Se deletou o baba atual, limpar estado
+      if (currentBaba?.id === babaId) {
+        setCurrentBaba(null);
+      }
+      
+      await loadMyBabas();
+      return true;
+    } catch (error) {
+      console.error('Error deleting baba:', error);
+      toast.error('Erro ao excluir baba');
+      return false;
+    } finally {
+      setLoading(false);
+    }
+  };
+
   // Efeito para carregar dados quando o usuário está disponível
   useEffect(() => {
     if (user) {
@@ -542,6 +604,9 @@ export const BabaProvider = ({ children }) => {
       loadTodayMatch,
       loadMatchPlayers,
       manualDraw,
+      // ⭐ NOVO: Editar/Deletar baba
+      updateBaba,
+      deleteBaba,
     }}>
       {children}
     </BabaContext.Provider>
