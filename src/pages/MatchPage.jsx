@@ -177,7 +177,9 @@ const MatchPage = () => {
         {/* Info adicional */}
         <div className="card-glass p-4 rounded-2xl text-center">
           <p className="text-xs text-white/60">
-            Horário: <span className="text-white font-black">{currentMatch.match_time}</span>
+            Horário: <span className="text-white font-black">
+              {currentMatch?.match_time || currentBaba?.game_time || '--:--'}
+            </span>
           </p>
           <p className="text-[9px] text-white/40 mt-1">
             Sorteio automático baseado nas confirmações de presença
