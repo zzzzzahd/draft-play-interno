@@ -337,14 +337,21 @@ export const BabaProvider = ({ children }) => {
 
       // 9. Criar partida no banco com teams_data
       const today = new Date().toISOString().split('T')[0];
+      
+      // Para compatibilidade, pegar os 2 primeiros times como A e B
+      const teamAName = teams[0]?.name || 'TIME A';
+      const teamBName = teams[1]?.name || 'TIME B';
+      
       const { data: match, error: matchError } = await supabase
         .from('matches')
         .insert([{
           baba_id: currentBaba.id,
           match_date: today,
-          match_time: currentBaba.game_time,
+          match_time: currentBaba.game_time, // ✅ MANTIDO
+          team_a_name: teamAName,             // ✅ Obrigatório (NOT NULL)
+          team_b_name: teamBName,             // ✅ Obrigatório (NOT NULL)
           status: 'scheduled',
-          teams_data: teams,
+          teams_data: teams,                  // ✅ JSONB com todos os times
           current_round: 1,
           queue_position: 0
         }])
