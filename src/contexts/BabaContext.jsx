@@ -212,18 +212,13 @@ export const BabaProvider = ({ children }) => {
       });
 
       // 5. Criar partida no banco
-      const today = new Date();
-      const dateStr = today.toISOString().split('T')[0]; // "2026-02-07"
-      const timeStr = currentBaba.game_time.substring(0,5); // "20:00"  
-      const matchDateTime = `${dateStr}T${timeStr}:00`; // "2026-02-07T20:00:00"
-      
+      const today = new Date().toISOString().split('T')[0];
       const { data: match, error: matchError } = await supabase
         .from('matches')
         .insert([{
           baba_id: currentBaba.id,
-          match_date: matchDateTime,
-          team_a_name: 'Time A',
-          team_b_name: 'Time B',
+          match_date: today,
+          match_time: currentBaba.game_time,
           status: 'scheduled',
         }])
         .select()
@@ -260,6 +255,133 @@ export const BabaProvider = ({ children }) => {
 
     } catch (error) {
       console.error('Error drawing teams:', error);
+      toast.error('Erro ao sortear times');
+      return null;
+    } finally {
+      setIsDrawing(false);
+    }
+  };
+
+  // ⭐ NOVO: Sortear múltiplos times (igual VisitorMode)
+  const drawTeamsMulti = async () => {
+    try {
+      if (!currentBaba || !gameConfirmations.length) return;
+      
+      const playersPerTeam = currentBaba.players_per_team || 5;
+      const allowReserves = currentBaba.allow_reserves !== false;
+      const minPlayers = currentBaba.min_players_to_start || 4;
+
+      // Verificar mínimo de jogadores
+      if (gameConfirmations.length < minPlayers) {
+        toast.error(`Mínimo de ${minPlayers} jogadores necessários`);
+        return;
+      }
+
+      setIsDrawing(true);
+
+      // 1. Pegar jogadores confirmados
+      const confirmedPlayers = gameConfirmations
+        .map(conf => conf.player)
+        .filter(Boolean);
+
+      // 2. Separar goleiros e linha
+      let goalies = confirmedPlayers.filter(p => p.position === 'goleiro');
+      let outfield = confirmedPlayers.filter(p => p.position !== 'goleiro');
+
+      // 3. Embaralhar
+      goalies = goalies.sort(() => Math.random() - 0.5);
+      outfield = outfield.sort(() => Math.random() - 0.5);
+
+      // 4. Calcular número de times
+      const numTeams = Math.floor(confirmedPlayers.length / playersPerTeam);
+      
+      if (numTeams < 2) {
+        toast.error(`Jogadores insuficientes para ${playersPerTeam} por time`);
+        return;
+      }
+
+      // 5. Criar times vazios
+      const teams = Array.from({ length: numTeams }, (_, i) => ({
+        id: `team-${String.fromCharCode(65 + i)}`,
+        name: `TIME ${String.fromCharCode(65 + i)}`,
+        starters: [],
+        reserves: [],
+        score: 0
+      }));
+
+      // 6. Distribuir goleiros (1 por time)
+      for (let i = 0; i < numTeams && goalies.length > 0; i++) {
+        teams[i].starters.push(goalies.shift());
+      }
+
+      // 7. Distribuir jogadores de linha nos titulares
+      let remaining = [...outfield, ...goalies]; // Goleiros extras viram linha
+      let teamIndex = 0;
+
+      // Preencher titulares até playersPerTeam
+      while (remaining.length > 0 && teams.some(t => t.starters.length < playersPerTeam)) {
+        if (teams[teamIndex].starters.length < playersPerTeam) {
+          teams[teamIndex].starters.push(remaining.shift());
+        }
+        teamIndex = (teamIndex + 1) % numTeams;
+      }
+
+      // 8. Distribuir sobras como reservas (se permitido)
+      if (allowReserves && remaining.length > 0) {
+        teamIndex = 0;
+        while (remaining.length > 0) {
+          teams[teamIndex].reserves.push(remaining.shift());
+          teamIndex = (teamIndex + 1) % numTeams;
+        }
+      }
+
+      // 9. Criar partida no banco com teams_data
+      const today = new Date().toISOString().split('T')[0];
+      const { data: match, error: matchError } = await supabase
+        .from('matches')
+        .insert([{
+          baba_id: currentBaba.id,
+          match_date: today,
+          match_time: currentBaba.game_time,
+          status: 'scheduled',
+          teams_data: teams,
+          current_round: 1,
+          queue_position: 0
+        }])
+        .select()
+        .single();
+
+      if (matchError) throw matchError;
+
+      // 10. Adicionar TODOS os jogadores em match_players (titulares + reservas)
+      const allPlayers = teams.flatMap(team => 
+        [...team.starters, ...team.reserves].map(player => ({
+          match_id: match.id,
+          player_id: player.id,
+          team: team.id
+        }))
+      );
+
+      const { error: playersError } = await supabase
+        .from('match_players')
+        .insert(allPlayers);
+
+      if (playersError) throw playersError;
+
+      // 11. Atualizar estados
+      setCurrentMatch(match);
+      await loadMatchPlayers(match.id);
+
+      const totalReserves = teams.reduce((sum, t) => sum + t.reserves.length, 0);
+      const reservesMsg = allowReserves && totalReserves > 0 
+        ? ` + ${totalReserves} reservas` 
+        : '';
+      
+      toast.success(`${numTeams} times sorteados!${reservesMsg}`);
+      return match;
+
+    } catch (error) {
+      console.error('Error drawing teams multi:', error);
       toast.error('Erro ao sortear times');
       return null;
     } finally {
@@ -606,6 +728,7 @@ export const BabaProvider = ({ children }) => {
       matchPlayers,
       isDrawing,
       drawTeamsAutomatically,
+      drawTeamsMulti,
       loadTodayMatch,
       loadMatchPlayers,
       manualDraw,
