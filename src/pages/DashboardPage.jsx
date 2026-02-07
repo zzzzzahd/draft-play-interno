@@ -4,9 +4,10 @@ import { useAuth } from '../contexts/MockAuthContext';
 import { useBaba } from '../contexts/BabaContext';
 import { 
   Trophy, Users, DollarSign, LogOut, 
-  ShieldCheck, Calendar, PlusCircle, Star, Edit, Copy
+  ShieldCheck, Calendar, PlusCircle, Star, Edit, Copy, Settings
 } from 'lucide-react';
 import PresenceConfirmation from '../components/PresenceConfirmation';
+import BabaSettings from '../components/BabaSettings';
 import toast from 'react-hot-toast';
 
 const DashboardPage = () => {
@@ -15,6 +16,7 @@ const DashboardPage = () => {
   const { myBabas, currentBaba, setCurrentBaba, players, loading } = useBaba();
   
   const [activeTab, setActiveTab] = useState('overview');
+  const [showSettings, setShowSettings] = useState(false);
 
   // Copiar código de convite
   const handleCopyInviteCode = () => {
@@ -196,6 +198,17 @@ const DashboardPage = () => {
                       </button>
                     ))}
                   </div>
+
+                  {/* Botão Configurações (só presidente) */}
+                  {isPresident && (
+                    <button
+                      onClick={() => setShowSettings(true)}
+                      className="w-full py-4 rounded-2xl bg-white/5 border border-white/10 text-white/60 font-black uppercase text-xs tracking-widest hover:bg-white/10 hover:text-white hover:border-cyan-electric/30 transition-all flex items-center justify-center gap-2"
+                    >
+                      <Settings size={16} />
+                      Configurações do Baba
+                    </button>
+                  )}
                 </div>
               )}
 
@@ -244,6 +257,14 @@ const DashboardPage = () => {
           </div>
         )}
       </div>
+
+      {/* Modal de Configurações */}
+      {showSettings && currentBaba && (
+        <BabaSettings 
+          baba={currentBaba} 
+          onClose={() => setShowSettings(false)} 
+        />
+      )}
     </div>
   );
 };
