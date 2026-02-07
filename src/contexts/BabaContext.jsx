@@ -19,6 +19,11 @@ export const BabaProvider = ({ children }) => {
   const [confirmationDeadline, setConfirmationDeadline] = useState(null);
   const [canConfirm, setCanConfirm] = useState(false);
 
+  // ⭐ NOVOS Estados de sorteio
+  const [currentMatch, setCurrentMatch] = useState(null);
+  const [matchPlayers, setMatchPlayers] = useState([]);
+  const [isDrawing, setIsDrawing] = useState(false);
+
   // Carregar babas do usuário
   const loadMyBabas = async () => {
     try {
@@ -102,6 +107,192 @@ export const BabaProvider = ({ children }) => {
       }
     } catch (error) {
       console.error('Error loading confirmations:', error);
+    }
+  };
+
+  // ⭐ NOVO: Carregar partida de hoje
+  const loadTodayMatch = async (babaId) => {
+    try {
+      const today = new Date().toISOString().split('T')[0];
+      
+      const { data, error } = await supabase
+        .from('matches')
+        .select('*')
+        .eq('baba_id', babaId)
+        .eq('match_date', today)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (error) throw error;
+      
+      if (data) {
+        setCurrentMatch(data);
+        await loadMatchPlayers(data.id);
+      } else {
+        setCurrentMatch(null);
+        setMatchPlayers([]);
+      }
+      
+      return data;
+    } catch (error) {
+      console.error('Error loading today match:', error);
+      return null;
+    }
+  };
+
+  // ⭐ NOVO: Carregar jogadores da partida
+  const loadMatchPlayers = async (matchId) => {
+    try {
+      const { data, error } = await supabase
+        .from('match_players')
+        .select(`
+          *,
+          player:players(*)
+        `)
+        .eq('match_id', matchId)
+        .order('team');
+
+      if (error) throw error;
+      setMatchPlayers(data || []);
+      return data;
+    } catch (error) {
+      console.error('Error loading match players:', error);
+      return [];
+    }
+  };
+
+  // ⭐ NOVO: Sortear times automaticamente
+  const drawTeamsAutomatically = async () => {
+    try {
+      if (!currentBaba || !gameConfirmations.length) return;
+      
+      // Verificar mínimo de jogadores
+      if (gameConfirmations.length < 4) {
+        console.log('Menos de 4 jogadores confirmados. Sorteio cancelado.');
+        return;
+      }
+
+      setIsDrawing(true);
+
+      // 1. Pegar jogadores confirmados com dados completos
+      const confirmedPlayers = gameConfirmations
+        .map(conf => conf.player)
+        .filter(Boolean);
+
+      // 2. Separar goleiros e jogadores de linha
+      const goalkeepers = confirmedPlayers.filter(p => p.position === 'goleiro');
+      const linePlayers = confirmedPlayers.filter(p => p.position !== 'goleiro');
+
+      // 3. Embaralhar
+      const shuffledGoalkeepers = [...goalkeepers].sort(() => Math.random() - 0.5);
+      const shuffledLinePlayers = [...linePlayers].sort(() => Math.random() - 0.5);
+
+      // 4. Dividir times
+      let teamA = [];
+      let teamB = [];
+
+      // Distribuir goleiros (um para cada time se possível)
+      if (shuffledGoalkeepers.length >= 2) {
+        teamA.push(shuffledGoalkeepers[0]);
+        teamB.push(shuffledGoalkeepers[1]);
+        // Goleiros extras vão para linha
+        shuffledLinePlayers.push(...shuffledGoalkeepers.slice(2));
+      } else if (shuffledGoalkeepers.length === 1) {
+        teamA.push(shuffledGoalkeepers[0]);
+      }
+
+      // Distribuir jogadores de linha alternadamente
+      shuffledLinePlayers.forEach((player, index) => {
+        if (index % 2 === 0) {
+          teamA.push(player);
+        } else {
+          teamB.push(player);
+        }
+      });
+
+      // 5. Criar partida no banco
+      const today = new Date().toISOString().split('T')[0];
+      const { data: match, error: matchError } = await supabase
+        .from('matches')
+        .insert([{
+          baba_id: currentBaba.id,
+          match_date: today,
+          match_time: currentBaba.game_time,
+          status: 'scheduled',
+        }])
+        .select()
+        .single();
+
+      if (matchError) throw matchError;
+
+      // 6. Adicionar jogadores aos times
+      const matchPlayersData = [
+        ...teamA.map(player => ({
+          match_id: match.id,
+          player_id: player.id,
+          team: 'A',
+        })),
+        ...teamB.map(player => ({
+          match_id: match.id,
+          player_id: player.id,
+          team: 'B',
+        })),
+      ];
+
+      const { error: playersError } = await supabase
+        .from('match_players')
+        .insert(matchPlayersData);
+
+      if (playersError) throw playersError;
+
+      // 7. Atualizar estados
+      setCurrentMatch(match);
+      await loadMatchPlayers(match.id);
+
+      toast.success('Times sorteados com sucesso!');
+      return match;
+
+    } catch (error) {
+      console.error('Error drawing teams:', error);
+      toast.error('Erro ao sortear times');
+      return null;
+    } finally {
+      setIsDrawing(false);
+    }
+  };
+
+  // ⭐ NOVO: Sorteio manual (presidente)
+  const manualDraw = async () => {
+    try {
+      if (!currentBaba) return;
+      
+      // Verificar se é presidente
+      if (currentBaba.president_id !== user.id) {
+        toast.error('Apenas o presidente pode sortear manualmente');
+        return;
+      }
+
+      // Verificar se tem confirmados
+      if (gameConfirmations.length < 4) {
+        toast.error('Mínimo de 4 jogadores confirmados necessário');
+        return;
+      }
+
+      // Se já existe match hoje, deletar antes
+      if (currentMatch) {
+        await supabase
+          .from('matches')
+          .delete()
+          .eq('id', currentMatch.id);
+      }
+
+      const match = await drawTeamsAutomatically();
+      return match;
+    } catch (error) {
+      console.error('Error manual draw:', error);
+      toast.error('Erro ao sortear times');
+      return null;
     }
   };
 
@@ -202,12 +393,11 @@ export const BabaProvider = ({ children }) => {
           baba_id: data.id,
           user_id: user.id,
           name: profile?.name || 'Presidente',
-          position: profile?.position || 'meio-campo',
+          position: 'linha',
         }]);
 
       if (playerError) {
         console.error('Error adding president as player:', playerError);
-        // Não bloqueia a criação do baba
       }
 
       toast.success('Baba criado com sucesso!');
@@ -269,7 +459,7 @@ export const BabaProvider = ({ children }) => {
     }
   };
 
-  // Sortear times
+  // Sortear times (antiga função - mantida para compatibilidade)
   const drawTeams = (availablePlayers) => {
     const shuffled = [...availablePlayers].sort(() => Math.random() - 0.5);
     const mid = Math.ceil(shuffled.length / 2);
@@ -292,6 +482,7 @@ export const BabaProvider = ({ children }) => {
   useEffect(() => {
     if (currentBaba) {
       loadPlayers(currentBaba.id);
+      loadTodayMatch(currentBaba.id); // ⭐ Carregar partida de hoje
     }
   }, [currentBaba]);
 
@@ -343,6 +534,14 @@ export const BabaProvider = ({ children }) => {
       confirmationDeadline,
       confirmPresence,
       cancelConfirmation,
+      // ⭐ NOVO: Sorteio de times
+      currentMatch,
+      matchPlayers,
+      isDrawing,
+      drawTeamsAutomatically,
+      loadTodayMatch,
+      loadMatchPlayers,
+      manualDraw,
     }}>
       {children}
     </BabaContext.Provider>
