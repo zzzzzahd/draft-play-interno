@@ -212,20 +212,18 @@ export const BabaProvider = ({ children }) => {
       });
 
       // 5. Criar partida no banco
-      // Construir datetime completo com data de hoje + horário do jogo
       const today = new Date();
-      const year = today.getFullYear();
-      const month = String(today.getMonth() + 1).padStart(2, '0');
-      const day = String(today.getDate()).padStart(2, '0');
-      const dateString = `${year}-${month}-${day}`;
-      const gameTimeString = currentBaba.game_time.substring(0, 5); // "20:00"
-      const matchDateTime = `${dateString}T${gameTimeString}:00`; // "2026-02-07T20:00:00"
+      const dateStr = today.toISOString().split('T')[0]; // "2026-02-07"
+      const timeStr = currentBaba.game_time.substring(0,5); // "20:00"  
+      const matchDateTime = `${dateStr}T${timeStr}:00`; // "2026-02-07T20:00:00"
       
       const { data: match, error: matchError } = await supabase
         .from('matches')
         .insert([{
           baba_id: currentBaba.id,
           match_date: matchDateTime,
+          team_a_name: 'Time A',
+          team_b_name: 'Time B',
           status: 'scheduled',
         }])
         .select()
