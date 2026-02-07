@@ -17,7 +17,7 @@ const PresenceConfirmation = () => {
     // ⭐ Sorteio
     currentMatch,
     isDrawing,
-    drawTeamsAutomatically,
+    drawTeamsMulti, // ⭐ MUDOU: Agora usa Multi ao invés de Automatically
   } = useBaba();
 
   const [timeRemaining, setTimeRemaining] = useState('');
@@ -59,7 +59,7 @@ const PresenceConfirmation = () => {
     if (!canConfirm && gameConfirmations.length >= 4 && !currentMatch && !isDrawing) {
       // Deadline passou, tem jogadores suficientes, e ainda não sorteou
       const timer = setTimeout(() => {
-        drawTeamsAutomatically().then((match) => {
+        drawTeamsMulti().then((match) => { // ⭐ MUDOU: drawTeamsMulti
           if (match) {
             // Navegar para tela de times após 2 segundos
             setTimeout(() => {
@@ -71,7 +71,7 @@ const PresenceConfirmation = () => {
 
       return () => clearTimeout(timer);
     }
-  }, [canConfirm, gameConfirmations, currentMatch, isDrawing, drawTeamsAutomatically, navigate]);
+  }, [canConfirm, gameConfirmations, currentMatch, isDrawing, drawTeamsMulti, navigate]);
 
   // Calcular horário do jogo e deadline
   const getGameTime = () => {
