@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useBaba } from '../contexts/BabaContext';
 import { Clock, CheckCircle2, XCircle, Users, AlertCircle } from 'lucide-react';
 
 const PresenceConfirmation = () => {
+  const navigate = useNavigate();
   const { 
     currentBaba, 
     gameConfirmations, 
@@ -11,7 +13,11 @@ const PresenceConfirmation = () => {
     confirmationDeadline,
     confirmPresence,
     cancelConfirmation,
-    loading 
+    loading,
+    // ⭐ Sorteio
+    currentMatch,
+    isDrawing,
+    drawTeamsAutomatically,
   } = useBaba();
 
   const [timeRemaining, setTimeRemaining] = useState('');
@@ -48,10 +54,29 @@ const PresenceConfirmation = () => {
     return () => clearInterval(interval);
   }, [confirmationDeadline]);
 
+  // ⭐ NOVO: Auto-sorteio após deadline
+  useEffect(() => {
+    if (!canConfirm && gameConfirmations.length >= 4 && !currentMatch && !isDrawing) {
+      // Deadline passou, tem jogadores suficientes, e ainda não sorteou
+      const timer = setTimeout(() => {
+        drawTeamsAutomatically().then((match) => {
+          if (match) {
+            // Navegar para tela de times após 2 segundos
+            setTimeout(() => {
+              navigate('/match');
+            }, 2000);
+          }
+        });
+      }, 3000); // Aguarda 3 segundos após deadline
+
+      return () => clearTimeout(timer);
+    }
+  }, [canConfirm, gameConfirmations, currentMatch, isDrawing, drawTeamsAutomatically, navigate]);
+
   // Calcular horário do jogo e deadline
   const getGameTime = () => {
     if (!currentBaba?.game_time) return '--:--';
-    return currentBaba.game_time.substring(0, 5);
+    return currentBaba.game_time.substring(0, 5); // HH:MM
   };
 
   const getDeadlineTime = () => {
@@ -65,60 +90,41 @@ const PresenceConfirmation = () => {
   // ESTADO: ANTES DO DEADLINE
   if (canConfirm) {
     return (
-      <div className="card-glass p-6 rounded-[2rem] border border-cyan-electric/30 bg-gradient-to-br from-cyan-electric/10 to-transparent">
+      <div className="card-glass p-6 rounded-[2rem] border border-cyan-electric/20 bg-cyan-electric/5">
         {/* Header */}
-        <div className="flex items-center justify-between mb-6">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-cyan-electric/20 flex items-center justify-center">
-              <Clock className="text-cyan-electric" size={20} />
-            </div>
-            <div>
-              <h3 className="text-sm font-black uppercase tracking-wider text-white">
-                Confirmar Presença
-              </h3>
-              <p className="text-[9px] font-black text-cyan-electric/60 uppercase tracking-widest">
-                Dia do Jogo
-              </p>
-            </div>
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-2">
+            <Clock className="text-cyan-electric" size={20} />
+            <h3 className="text-sm font-black uppercase tracking-wider">
+              Confirmar Presença
+            </h3>
           </div>
-          <div className="flex items-center gap-2 bg-cyan-electric/20 px-4 py-2 rounded-xl border border-cyan-electric/30">
-            <Users size={16} className="text-cyan-electric" />
-            <span className="text-sm font-black text-cyan-electric">
-              {gameConfirmations.length}
+          <div className="flex items-center gap-2 bg-cyan-electric/10 px-3 py-1 rounded-xl">
+            <Users size={14} className="text-cyan-electric" />
+            <span className="text-xs font-black text-cyan-electric">
+              {gameConfirmations.length} confirmado{gameConfirmations.length !== 1 && 's'}
             </span>
           </div>
         </div>
 
-        {/* Horários em Grid */}
-        <div className="grid grid-cols-2 gap-4 mb-6">
-          <div className="bg-black/30 p-4 rounded-xl border border-white/10">
-            <p className="text-[9px] font-black text-white/40 uppercase tracking-widest mb-2">
-              Horário do Jogo
-            </p>
-            <p className="text-2xl font-black font-mono text-white">
-              {getGameTime()}
-            </p>
+        {/* Horários */}
+        <div className="grid grid-cols-2 gap-3 mb-4">
+          <div className="bg-white/5 p-3 rounded-xl border border-white/5">
+            <p className="text-[9px] font-black text-white/40 uppercase mb-1">Horário do Jogo</p>
+            <p className="text-lg font-black text-white">{getGameTime()}</p>
           </div>
-          <div className="bg-black/30 p-4 rounded-xl border border-yellow-500/20">
-            <p className="text-[9px] font-black text-white/40 uppercase tracking-widest mb-2">
-              Prazo até
-            </p>
-            <p className="text-2xl font-black font-mono text-yellow-500">
-              {getDeadlineTime()}
-            </p>
+          <div className="bg-white/5 p-3 rounded-xl border border-white/5">
+            <p className="text-[9px] font-black text-white/40 uppercase mb-1">Prazo até</p>
+            <p className="text-lg font-black text-yellow-500">{getDeadlineTime()}</p>
           </div>
         </div>
 
-        {/* Contador Destacado */}
-        <div className="mb-6 p-6 bg-gradient-to-r from-black/40 to-black/20 rounded-2xl border border-white/10 text-center">
-          <p className="text-[9px] font-black text-white/40 uppercase tracking-[0.2em] mb-3">
-            Tempo Restante para Confirmar
-          </p>
-          <p className={`text-4xl font-black font-mono tracking-tight ${
-            timeRemaining.includes('h') || (timeRemaining.includes('min') && parseInt(timeRemaining) > 5)
+        {/* Contador */}
+        <div className="mb-4 p-4 bg-black/20 rounded-xl border border-white/5 text-center">
+          <p className="text-[9px] font-black text-white/40 uppercase mb-2">Tempo Restante</p>
+          <p className={`text-2xl font-black font-mono ${
+            timeRemaining.includes('min') || timeRemaining.includes('h') 
               ? 'text-green-400' 
-              : timeRemaining.includes('min')
-              ? 'text-yellow-500'
               : 'text-red-500 animate-pulse'
           }`}>
             {timeRemaining}
@@ -127,17 +133,17 @@ const PresenceConfirmation = () => {
 
         {/* Botão de Ação */}
         {myConfirmation ? (
-          <div className="space-y-4">
-            <div className="flex items-center justify-center gap-3 p-5 bg-green-500/10 border border-green-500/30 rounded-2xl">
-              <CheckCircle2 className="text-green-500" size={24} />
-              <span className="text-base font-black text-green-500 uppercase tracking-wide">
-                Presença Confirmada ✓
+          <div className="space-y-3">
+            <div className="flex items-center justify-center gap-2 p-4 bg-green-500/10 border border-green-500/20 rounded-xl">
+              <CheckCircle2 className="text-green-500" size={20} />
+              <span className="text-sm font-black text-green-500 uppercase">
+                Presença Confirmada
               </span>
             </div>
             <button
               onClick={cancelConfirmation}
               disabled={loading}
-              className="w-full py-4 bg-white/5 border border-white/10 rounded-xl text-white/60 text-xs font-black uppercase tracking-widest hover:bg-white/10 hover:text-white hover:border-red-500/30 transition-all disabled:opacity-50"
+              className="w-full py-3 bg-white/5 border border-white/10 rounded-xl text-white/60 text-xs font-black uppercase tracking-widest hover:bg-white/10 hover:text-white transition-all disabled:opacity-50"
             >
               {loading ? 'Cancelando...' : 'Cancelar Confirmação'}
             </button>
@@ -146,47 +152,35 @@ const PresenceConfirmation = () => {
           <button
             onClick={confirmPresence}
             disabled={loading}
-            className="w-full py-6 rounded-2xl bg-gradient-to-r from-cyan-electric via-blue-500 to-cyan-electric text-black font-black uppercase italic tracking-tight text-base shadow-[0_10px_40px_rgba(0,255,242,0.3)] hover:scale-[1.02] active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+            className="w-full py-5 rounded-2xl bg-gradient-to-r from-cyan-electric to-blue-600 text-black font-black uppercase italic tracking-tighter shadow-[0_10px_40px_rgba(0,255,242,0.2)] hover:scale-[1.02] active:scale-95 transition-all disabled:opacity-50"
           >
-            {loading ? (
-              <span className="flex items-center justify-center gap-2">
-                <div className="w-5 h-5 border-3 border-black/30 border-t-black rounded-full animate-spin"></div>
-                Confirmando...
-              </span>
-            ) : (
-              '✓ Confirmar Minha Presença'
-            )}
+            {loading ? 'Confirmando...' : '✓ Confirmar Presença'}
           </button>
         )}
 
         {/* Lista de Confirmados */}
         {gameConfirmations.length > 0 && (
-          <div className="mt-6 pt-6 border-t border-white/10">
-            <div className="flex items-center justify-between mb-3">
-              <p className="text-[10px] font-black text-white/40 uppercase tracking-widest">
-                Jogadores Confirmados
-              </p>
-              <span className="text-[10px] font-black text-cyan-electric bg-cyan-electric/10 px-2 py-1 rounded">
-                {gameConfirmations.length}
-              </span>
-            </div>
+          <div className="mt-4 pt-4 border-t border-white/5">
+            <p className="text-[9px] font-black text-white/40 uppercase mb-2">
+              Confirmados ({gameConfirmations.length})
+            </p>
             <div className="flex flex-wrap gap-2">
-              {gameConfirmations.slice(0, 12).map((conf, i) => (
+              {gameConfirmations.slice(0, 8).map((conf, i) => (
                 <div 
                   key={i}
-                  className="flex items-center gap-2 bg-white/5 px-3 py-2 rounded-lg border border-white/10 hover:bg-white/10 transition-all"
+                  className="flex items-center gap-1 bg-white/5 px-2 py-1 rounded-lg border border-white/5"
                 >
-                  <div className={`w-2 h-2 rounded-full ${
-                    conf.player?.position === 'goleiro' ? 'bg-yellow-400 shadow-[0_0_8px_rgba(250,204,21,0.6)]' : 'bg-cyan-electric shadow-[0_0_8px_rgba(0,242,255,0.6)]'
+                  <div className={`w-1.5 h-1.5 rounded-full ${
+                    conf.player?.position === 'goleiro' ? 'bg-yellow-400' : 'bg-cyan-electric'
                   }`}></div>
-                  <span className="text-[10px] font-bold text-white">
+                  <span className="text-[9px] font-bold text-white/80">
                     {conf.player?.name || 'Jogador'}
                   </span>
                 </div>
               ))}
-              {gameConfirmations.length > 12 && (
-                <span className="text-[10px] font-black text-white/40 px-3 py-2">
-                  +{gameConfirmations.length - 12} jogadores
+              {gameConfirmations.length > 8 && (
+                <span className="text-[9px] font-black text-white/40 px-2 py-1">
+                  +{gameConfirmations.length - 8}
                 </span>
               )}
             </div>
@@ -196,73 +190,107 @@ const PresenceConfirmation = () => {
     );
   }
 
-  // ESTADO: APÓS O DEADLINE (Confirmações encerradas)
+  // ESTADO: APÓS O DEADLINE
   return (
-    <div className="card-glass p-6 rounded-[2rem] border border-yellow-500/30 bg-gradient-to-br from-yellow-500/10 to-transparent">
+    <div className="card-glass p-6 rounded-[2rem] border border-yellow-500/20 bg-yellow-500/5">
       {/* Header */}
-      <div className="flex items-center gap-3 mb-6">
-        <div className="w-10 h-10 rounded-xl bg-yellow-500/20 flex items-center justify-center">
-          <AlertCircle className="text-yellow-500" size={20} />
-        </div>
-        <div>
-          <h3 className="text-sm font-black uppercase tracking-wider text-yellow-500">
-            Confirmações Encerradas
-          </h3>
-          <p className="text-[9px] font-black text-white/40 uppercase tracking-widest">
-            Prazo Expirado
-          </p>
-        </div>
+      <div className="flex items-center gap-2 mb-4">
+        <AlertCircle className="text-yellow-500" size={20} />
+        <h3 className="text-sm font-black uppercase tracking-wider text-yellow-500">
+          Confirmações Encerradas
+        </h3>
       </div>
 
       {/* Info */}
-      <div className="mb-6 p-5 bg-black/30 rounded-xl border border-white/10 text-center">
-        <p className="text-xs text-white/60 mb-4">
+      <div className="mb-4 p-4 bg-black/20 rounded-xl border border-white/5 text-center">
+        <p className="text-xs text-white/60 mb-2">
           O prazo para confirmação de presença terminou.
         </p>
-        <div className="flex items-center justify-center gap-3">
-          <Users className="text-cyan-electric" size={20} />
-          <span className="text-2xl font-black text-cyan-electric">
-            {gameConfirmations.length}
-          </span>
-          <span className="text-xs font-black text-white/60 uppercase">
-            confirmado{gameConfirmations.length !== 1 && 's'}
+        <div className="flex items-center justify-center gap-2 mt-3">
+          <Users className="text-cyan-electric" size={16} />
+          <span className="text-lg font-black text-cyan-electric">
+            {gameConfirmations.length} confirmado{gameConfirmations.length !== 1 && 's'}
           </span>
         </div>
       </div>
 
+      {/* Status de sorteio */}
+      {isDrawing ? (
+        <div className="p-4 bg-cyan-electric/10 border border-cyan-electric/30 rounded-xl text-center">
+          <div className="w-8 h-8 border-4 border-cyan-electric border-t-transparent rounded-full animate-spin mx-auto mb-2"></div>
+          <p className="text-xs font-black text-cyan-electric uppercase">
+            Sorteando times...
+          </p>
+        </div>
+      ) : currentMatch ? (
+        <div className="p-4 bg-green-500/10 border border-green-500/30 rounded-xl text-center">
+          <CheckCircle2 className="text-green-500 mx-auto mb-2" size={24} />
+          <p className="text-xs font-black text-green-500 uppercase mb-3">
+            Times sorteados!
+          </p>
+          <button
+            onClick={() => navigate('/match')}
+            className="w-full py-3 bg-green-500 text-black font-black uppercase text-xs rounded-xl hover:bg-green-400 transition-all"
+          >
+            Ver Times
+          </button>
+        </div>
+      ) : gameConfirmations.length >= 4 ? (
+        <div className="p-4 bg-white/5 rounded-xl border border-white/5 text-center">
+          <p className="text-[9px] font-black text-white/40 uppercase mb-2">
+            Sorteio automático em andamento...
+          </p>
+          <div className="flex items-center justify-center gap-2">
+            <div className="w-2 h-2 bg-cyan-electric rounded-full animate-pulse"></div>
+            <div className="w-2 h-2 bg-cyan-electric rounded-full animate-pulse" style={{animationDelay: '0.2s'}}></div>
+            <div className="w-2 h-2 bg-cyan-electric rounded-full animate-pulse" style={{animationDelay: '0.4s'}}></div>
+          </div>
+        </div>
+      ) : (
+        <div className="p-4 bg-red-500/10 border border-red-500/30 rounded-xl text-center">
+          <XCircle className="text-red-500 mx-auto mb-2" size={24} />
+          <p className="text-xs font-black text-red-500 uppercase">
+            Jogadores insuficientes
+          </p>
+          <p className="text-[9px] text-white/40 mt-1">
+            Mínimo 4 jogadores necessários
+          </p>
+        </div>
+      )}
+
       {/* Status do usuário */}
       {myConfirmation ? (
-        <div className="flex items-center justify-center gap-3 p-4 bg-green-500/10 border border-green-500/30 rounded-xl mb-6">
-          <CheckCircle2 className="text-green-500" size={20} />
-          <span className="text-sm font-black text-green-500 uppercase">
-            Você Confirmou Presença
+        <div className="flex items-center justify-center gap-2 p-3 bg-green-500/10 border border-green-500/20 rounded-xl mt-4">
+          <CheckCircle2 className="text-green-500" size={18} />
+          <span className="text-xs font-black text-green-500 uppercase">
+            Você confirmou presença
           </span>
         </div>
       ) : (
-        <div className="flex items-center justify-center gap-3 p-4 bg-red-500/10 border border-red-500/30 rounded-xl mb-6">
-          <XCircle className="text-red-500" size={20} />
-          <span className="text-sm font-black text-red-500 uppercase">
-            Você Não Confirmou
+        <div className="flex items-center justify-center gap-2 p-3 bg-red-500/10 border border-red-500/20 rounded-xl mt-4">
+          <XCircle className="text-red-500" size={18} />
+          <span className="text-xs font-black text-red-500 uppercase">
+            Você não confirmou
           </span>
         </div>
       )}
 
       {/* Lista de Confirmados */}
       {gameConfirmations.length > 0 && (
-        <div className="pt-6 border-t border-white/10">
-          <p className="text-[10px] font-black text-white/40 uppercase tracking-widest mb-3">
+        <div className="mt-4 pt-4 border-t border-white/5">
+          <p className="text-[9px] font-black text-white/40 uppercase mb-2">
             Lista de Confirmados ({gameConfirmations.length})
           </p>
           <div className="flex flex-wrap gap-2">
             {gameConfirmations.map((conf, i) => (
               <div 
                 key={i}
-                className="flex items-center gap-2 bg-white/5 px-3 py-2 rounded-lg border border-white/10"
+                className="flex items-center gap-1 bg-white/5 px-2 py-1 rounded-lg border border-white/5"
               >
-                <div className={`w-2 h-2 rounded-full ${
+                <div className={`w-1.5 h-1.5 rounded-full ${
                   conf.player?.position === 'goleiro' ? 'bg-yellow-400' : 'bg-cyan-electric'
                 }`}></div>
-                <span className="text-[10px] font-bold text-white">
+                <span className="text-[9px] font-bold text-white/80">
                   {conf.player?.name || 'Jogador'}
                 </span>
               </div>
@@ -270,13 +298,6 @@ const PresenceConfirmation = () => {
           </div>
         </div>
       )}
-
-      {/* Mensagem de aguardo */}
-      <div className="mt-6 p-4 bg-white/5 rounded-xl border border-white/10 text-center">
-        <p className="text-[10px] font-black text-white/40 uppercase tracking-wider">
-          ⏳ Aguardando sorteio automático...
-        </p>
-      </div>
     </div>
   );
 };
