@@ -18,6 +18,7 @@ export const BabaProvider = ({ children }) => {
   const [myConfirmation, setMyConfirmation] = useState(null);
   const [confirmationDeadline, setConfirmationDeadline] = useState(null);
   const [canConfirm, setCanConfirm] = useState(false);
+  
   // ⭐ NOVO: Configuração do sorteio
   const [drawConfig, setDrawConfig] = useState({
     playersPerTeam: 5,
@@ -166,13 +167,6 @@ export const BabaProvider = ({ children }) => {
       return [];
     }
   };
-
-  // ⭐ NOVO: Sortear times automaticamente
-  const drawTeamsIntelligent = async () => {
-    try {
-      if (!currentBaba || !gameConfirmations.length) return;
-      
-      // Verificar mínimo de jogadores
 
   // ⭐ FUNÇÃO DE SORTEIO INTELIGENTE (Baseada no Visitor Mode)
   const drawTeamsIntelligent = async () => {
