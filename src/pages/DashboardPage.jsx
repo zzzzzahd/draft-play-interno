@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import PresenceConfirmation from '../components/PresenceConfirmation';
 import BabaSettings from '../components/BabaSettings';
+import DrawConfigPanel from '../components/DrawConfigPanel';
 import toast from 'react-hot-toast';
 
 const DashboardPage = () => {
@@ -155,6 +156,9 @@ const DashboardPage = () => {
 
                   {/* ⭐ NOVO: Componente de Confirmação de Presença */}
                   <PresenceConfirmation />
+
+                  {/* ⭐ NOVO: Painel de Configuração do Sorteio (Só Presidente) */}
+                  {isPresident && <DrawConfigPanel />}
 
                   {/* Código de Convite - Só para Presidente */}
                   {isPresident && currentBaba.invite_code && (
