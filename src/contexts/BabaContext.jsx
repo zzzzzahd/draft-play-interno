@@ -18,12 +18,12 @@ export const BabaProvider = ({ children }) => {
   const [myConfirmation, setMyConfirmation] = useState(null);
   const [confirmationDeadline, setConfirmationDeadline] = useState(null);
   const [canConfirm, setCanConfirm] = useState(false);
-
   // ⭐ NOVO: Configuração do sorteio
   const [drawConfig, setDrawConfig] = useState({
     playersPerTeam: 5,
     strategy: 'reserve' // 'reserve' ou 'substitute'
   });
+
   // ⭐ NOVOS Estados de sorteio
   const [currentMatch, setCurrentMatch] = useState(null);
   const [matchPlayers, setMatchPlayers] = useState([]);
@@ -168,12 +168,11 @@ export const BabaProvider = ({ children }) => {
   };
 
   // ⭐ NOVO: Sortear times automaticamente
-  const drawTeamsAutomatically = async () => {
+  const drawTeamsIntelligent = async () => {
     try {
       if (!currentBaba || !gameConfirmations.length) return;
       
       // Verificar mínimo de jogadores
-      if (gameConfirmations.length < 4) {
 
   // ⭐ FUNÇÃO DE SORTEIO INTELIGENTE (Baseada no Visitor Mode)
   const drawTeamsIntelligent = async () => {
@@ -312,6 +311,13 @@ export const BabaProvider = ({ children }) => {
       setIsDrawing(false);
     }
   };
+
+  // ⭐ NOVO: Sorteio manual (presidente)
+  const manualDraw = async () => {
+    try {
+      if (!currentBaba) return;
+      
+      // Verificar se é presidente
       if (currentBaba.president_id !== user.id) {
         toast.error('Apenas o presidente pode sortear manualmente');
         return;
@@ -331,7 +337,7 @@ export const BabaProvider = ({ children }) => {
           .eq('id', currentMatch.id);
       }
 
-      const match = await drawTeamsAutomatically();
+      const match = await drawTeamsIntelligent();
       return match;
     } catch (error) {
       console.error('Error manual draw:', error);
