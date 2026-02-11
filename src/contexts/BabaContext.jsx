@@ -235,6 +235,13 @@ export const BabaProvider = ({ children }) => {
 
       const today = new Date().toISOString().split('T')[0];
       
+      // ⭐ NOVO: Deletar sorteio anterior de hoje (se existir)
+      await supabase
+        .from('draw_results')
+        .delete()
+        .eq('baba_id', currentBaba.id)
+        .eq('draw_date', today);
+      
       const { data: drawResult, error: drawError } = await supabase
         .from('draw_results')
         .insert([{
@@ -330,6 +337,14 @@ export const BabaProvider = ({ children }) => {
           .delete()
           .eq('id', currentMatch.id);
       }
+
+      // ⭐ NOVO: Deletar draw_result de hoje (se existir)
+      const today = new Date().toISOString().split('T')[0];
+      await supabase
+        .from('draw_results')
+        .delete()
+        .eq('baba_id', currentBaba.id)
+        .eq('draw_date', today);
 
       const match = await drawTeamsIntelligent();
       return match;
