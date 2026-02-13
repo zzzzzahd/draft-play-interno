@@ -59,11 +59,11 @@ const PresenceConfirmation = () => {
     if (!canConfirm && gameConfirmations.length >= 4 && !currentMatch && !isDrawing) {
       // Deadline passou, tem jogadores suficientes, e ainda não sorteou
       const timer = setTimeout(() => {
-        drawTeamsIntelligent().then((match) => { // ⭐ CORRETO: drawTeamsIntelligent
+        drawTeamsIntelligent().then((match) => {
           if (match) {
             // Navegar para tela de times após 2 segundos
             setTimeout(() => {
-              navigate('/match');
+              navigate('/teams');
             }, 2000);
           }
         });
@@ -229,7 +229,7 @@ const PresenceConfirmation = () => {
             Times sorteados!
           </p>
           <button
-            onClick={() => navigate('/match')}
+            onClick={() => navigate('/teams')}
             className="w-full py-3 bg-green-500 text-black font-black uppercase text-xs rounded-xl hover:bg-green-400 transition-all"
           >
             Ver Times
