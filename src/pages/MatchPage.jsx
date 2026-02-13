@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useBaba } from '../contexts/BabaContext';
 import { supabase } from '../services/supabase';
-import { ArrowLeft, Play, Pause, Users } from 'lucide-react';
+import { ArrowLeft, Play, Pause, Users, X, Target, Handshake } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 const MatchPage = () => {
@@ -14,6 +14,13 @@ const MatchPage = () => {
   const [timer, setTimer] = useState(600); // 10 minutos
   const [isActive, setIsActive] = useState(false);
   const [loading, setLoading] = useState(true);
+
+  // ⭐ NOVO: Estados para stats
+  const [showGoalModal, setShowGoalModal] = useState(false);
+  const [goalTeam, setGoalTeam] = useState(null); // 'A' ou 'B'
+  const [selectedScorer, setSelectedScorer] = useState('');
+  const [selectedAssist, setSelectedAssist] = useState('');
+  const [matchId, setMatchId] = useState(null);
 
   // 1. Carregar times do draw_results
   useEffect(() => {
@@ -42,6 +49,9 @@ const MatchPage = () => {
             scoreA: 0,
             scoreB: 0
           });
+
+          // ⭐ NOVO: Buscar ou criar match do dia
+          await loadOrCreateMatch(data.teams[0], data.teams[1]);
         } else {
           toast.error('Nenhum sorteio encontrado!');
           navigate('/teams');
@@ -57,6 +67,68 @@ const MatchPage = () => {
 
     loadTeams();
   }, [currentBaba, navigate]);
+
+  // ⭐ NOVO: Buscar ou criar match
+  const loadOrCreateMatch = async (teamA, teamB) => {
+    try {
+      const today = new Date().toISOString().split('T')[0];
+      
+      // Buscar match existente
+      const { data: existingMatch, error: searchError } = await supabase
+        .from('matches')
+        .select('id')
+        .eq('baba_id', currentBaba.id)
+        .eq('match_date', today)
+        .limit(1)
+        .maybeSingle();
+
+      if (searchError && searchError.code !== 'PGRST116') throw searchError;
+
+      if (existingMatch) {
+        setMatchId(existingMatch.id);
+      } else {
+        // Criar novo match
+        const { data: newMatch, error: createError } = await supabase
+          .from('matches')
+          .insert([{
+            baba_id: currentBaba.id,
+            match_date: today,
+            team_a_name: teamA.name,
+            team_b_name: teamB.name,
+            status: 'in_progress'
+          }])
+          .select()
+          .single();
+
+        if (createError) throw createError;
+        setMatchId(newMatch.id);
+
+        // Criar registros de match_players para todos os jogadores
+        const matchPlayers = [
+          ...teamA.players.map(p => ({
+            match_id: newMatch.id,
+            player_id: p.id,
+            team: 'A',
+            position: p.position || 'linha'
+          })),
+          ...teamB.players.map(p => ({
+            match_id: newMatch.id,
+            player_id: p.id,
+            team: 'B',
+            position: p.position || 'linha'
+          }))
+        ];
+
+        const { error: playersError } = await supabase
+          .from('match_players')
+          .insert(matchPlayers);
+
+        if (playersError) throw playersError;
+      }
+    } catch (error) {
+      console.error('Erro ao criar/carregar match:', error);
+    }
+  };
 
   // 2. Lógica do Cronômetro
   useEffect(() => {
@@ -80,6 +152,57 @@ const MatchPage = () => {
     }
   }, [currentMatch?.scoreA, currentMatch?.scoreB]);
 
+  // ⭐ NOVO: Abrir modal de gol
+  const handleGoalClick = (team) => {
+    setGoalTeam(team);
+    setSelectedScorer('');
+    setSelectedAssist('');
+    setShowGoalModal(true);
+  };
+
+  // ⭐ NOVO: Salvar gol com stats
+  const handleSaveGoal = async () => {
+    if (!selectedScorer) {
+      toast.error('Selecione quem fez o gol!');
+      return;
+    }
+
+    try {
+      // Atualizar gols do jogador
+      const { error: goalError } = await supabase
+        .from('match_players')
+        .update({ goals: supabase.raw('goals + 1') })
+        .eq('match_id', matchId)
+        .eq('player_id', selectedScorer);
+
+      if (goalError) throw goalError;
+
+      // Atualizar assistência (se houver)
+      if (selectedAssist) {
+        const { error: assistError } = await supabase
+          .from('match_players')
+          .update({ assists: supabase.raw('assists + 1') })
+          .eq('match_id', matchId)
+          .eq('player_id', selectedAssist);
+
+        if (assistError) throw assistError;
+      }
+
+      // Atualizar placar local
+      if (goalTeam === 'A') {
+        setCurrentMatch({...currentMatch, scoreA: currentMatch.scoreA + 1});
+      } else {
+        setCurrentMatch({...currentMatch, scoreB: currentMatch.scoreB + 1});
+      }
+
+      setShowGoalModal(false);
+      toast.success('Gol registrado!');
+    } catch (error) {
+      console.error('Erro ao salvar gol:', error);
+      toast.error('Erro ao registrar gol');
+    }
+  };
+
   // 4. Finalizar partida e gerenciar fila
   const handleMatchEnd = () => {
     if (!currentMatch) return;
@@ -101,15 +224,12 @@ const MatchPage = () => {
 
     // Gerenciar a Fila (Quem ganha fica)
     if (winner === "A") {
-      // Time A fica, Time B vai pro final da fila
       const loser = queue.splice(1, 1)[0];
       queue.push(loser);
     } else if (winner === "B") {
-      // Time B fica, Time A vai pro final da fila
       const loser = queue.splice(0, 1)[0];
       queue.push(loser);
     } else {
-      // Empate: Ambos vão pro final da fila
       const team1 = queue.shift();
       const team2 = queue.shift();
       queue.push(team1, team2);
@@ -184,7 +304,7 @@ const MatchPage = () => {
                 {currentMatch.teamA.name}
               </p>
               <button 
-                onClick={() => setCurrentMatch({...currentMatch, scoreA: currentMatch.scoreA + 1})}
+                onClick={() => handleGoalClick('A')}
                 className="text-6xl font-black w-full py-6 bg-white/5 rounded-3xl border border-white/10 hover:bg-white/10 active:scale-90 transition-all shadow-inner"
               >
                 {currentMatch.scoreA}
@@ -200,7 +320,7 @@ const MatchPage = () => {
                 {currentMatch.teamB.name}
               </p>
               <button 
-                onClick={() => setCurrentMatch({...currentMatch, scoreB: currentMatch.scoreB + 1})}
+                onClick={() => handleGoalClick('B')}
                 className="text-6xl font-black w-full py-6 bg-white/5 rounded-3xl border border-white/10 hover:bg-white/10 active:scale-90 transition-all shadow-inner"
               >
                 {currentMatch.scoreB}
@@ -288,6 +408,91 @@ const MatchPage = () => {
           <p className="mt-1">Quem Ganha Fica • Empate Sai os Dois</p>
         </div>
       </div>
+
+      {/* ⭐ MODAL DE GOL */}
+      {showGoalModal && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-[#0d0d0d] border border-cyan-electric/30 rounded-3xl p-6 max-w-sm w-full space-y-6">
+            {/* Header */}
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Target className="text-cyan-electric" size={24} />
+                <h3 className="text-xl font-black uppercase">GOL!</h3>
+              </div>
+              <button
+                onClick={() => setShowGoalModal(false)}
+                className="text-white/40 hover:text-white transition-colors"
+              >
+                <X size={24} />
+              </button>
+            </div>
+
+            {/* Time */}
+            <div className={`p-3 rounded-xl text-center font-black ${
+              goalTeam === 'A' ? 'bg-cyan-electric/10 text-cyan-electric' : 'bg-yellow-500/10 text-yellow-500'
+            }`}>
+              {goalTeam === 'A' ? currentMatch.teamA.name : currentMatch.teamB.name}
+            </div>
+
+            {/* Quem fez o gol */}
+            <div>
+              <label className="block text-xs font-black uppercase tracking-wider text-white/60 mb-2">
+                Quem fez o gol? *
+              </label>
+              <select
+                value={selectedScorer}
+                onChange={(e) => setSelectedScorer(e.target.value)}
+                className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:border-cyan-electric transition-colors"
+              >
+                <option value="">Selecione...</option>
+                {(goalTeam === 'A' ? currentMatch.teamA.players : currentMatch.teamB.players)?.map((player) => (
+                  <option key={player.id} value={player.id}>
+                    {player.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Assistência */}
+            <div>
+              <label className="block text-xs font-black uppercase tracking-wider text-white/60 mb-2 flex items-center gap-2">
+                <Handshake size={14} />
+                Assistência de? (opcional)
+              </label>
+              <select
+                value={selectedAssist}
+                onChange={(e) => setSelectedAssist(e.target.value)}
+                className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:border-cyan-electric transition-colors"
+              >
+                <option value="">Nenhuma / Não sei</option>
+                {(goalTeam === 'A' ? currentMatch.teamA.players : currentMatch.teamB.players)
+                  ?.filter(p => p.id !== selectedScorer)
+                  .map((player) => (
+                    <option key={player.id} value={player.id}>
+                      {player.name}
+                    </option>
+                  ))}
+              </select>
+            </div>
+
+            {/* Botões */}
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowGoalModal(false)}
+                className="flex-1 py-3 bg-white/5 border border-white/10 rounded-xl font-black uppercase text-xs hover:bg-white/10 transition-all"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleSaveGoal}
+                className="flex-1 py-3 bg-cyan-electric text-black rounded-xl font-black uppercase text-xs hover:scale-105 transition-all shadow-[0_0_20px_rgba(0,242,255,0.3)]"
+              >
+                Confirmar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
