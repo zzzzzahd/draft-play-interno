@@ -1,4 +1,3 @@
-// Force rebuild: 2026-02-13 08:35
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { supabase } from '../services/supabase';
 import { useAuth } from './MockAuthContext';
@@ -126,8 +125,7 @@ export const BabaProvider = ({ children }) => {
         .from('matches')
         .select('*')
         .eq('baba_id', babaId)
-        .gte('match_date', `${today}T00:00:00`)
-        .lt('match_date', `${today}T23:59:59`)
+        .eq('match_date', today)
         .order('created_at', { ascending: false })
         .limit(1)
         .maybeSingle();
@@ -237,16 +235,10 @@ export const BabaProvider = ({ children }) => {
 
       const today = new Date().toISOString().split('T')[0];
       
-      // ⭐ DELETAR sorteio anterior do mesmo dia (se existir)
-      await supabase
-        .from('draw_results')
-        .delete()
-        .eq('baba_id', currentBaba.id)
-        .eq('draw_date', today);
-      
+      // ⭐ USAR UPSERT: Se já existir, atualiza. Se não existir, insere.
       const { data: drawResult, error: drawError } = await supabase
         .from('draw_results')
-        .insert([{
+        .upsert({
           baba_id: currentBaba.id,
           draw_date: today,
           teams: teams,
@@ -255,7 +247,9 @@ export const BabaProvider = ({ children }) => {
           total_confirmed: confirmedPlayers.length,
           players_per_team: playersPerTeam,
           strategy: strategy
-        }])
+        }, {
+          onConflict: 'baba_id,draw_date' // Identifica pelo par único
+        })
         .select()
         .single();
 
@@ -263,14 +257,6 @@ export const BabaProvider = ({ children }) => {
 
       const timeStr = currentBaba.game_time.substring(0, 5);
       const matchDateTime = `${today}T${timeStr}:00`;
-      
-      // ⭐ DELETAR match anterior do mesmo dia (se existir)
-      if (currentMatch) {
-        await supabase
-          .from('matches')
-          .delete()
-          .eq('id', currentMatch.id);
-      }
       
       const { data: match, error: matchError } = await supabase
         .from('matches')
@@ -287,20 +273,15 @@ export const BabaProvider = ({ children }) => {
 
       if (matchError) throw matchError;
 
-      const matchPlayersData = [
-        ...teams[0].players.map(player => ({
+      // ⭐ SALVAR TODOS OS JOGADORES DE TODOS OS TIMES
+      const matchPlayersData = teams.flatMap((team, teamIndex) => 
+        team.players.map(player => ({
           match_id: match.id,
           player_id: player.id,
-          team: 'Team A',
+          team: String.fromCharCode(65 + teamIndex), // A, B, C, D, E...
           position: player.position || 'linha',
-        })),
-        ...teams[1].players.map(player => ({
-          match_id: match.id,
-          player_id: player.id,
-          team: 'Team B',
-          position: player.position || 'linha',
-        })),
-      ];
+        }))
+      );
 
       const { error: playersError } = await supabase
         .from('match_players')
@@ -335,11 +316,20 @@ export const BabaProvider = ({ children }) => {
       }
 
       // Verificar se tem confirmados
-      if (gameConfirmations.length < drawConfig.playersPerTeam * 2) {
-        toast.error(`Mínimo de ${drawConfig.playersPerTeam * 2} jogadores confirmados necessário`);
+      if (gameConfirmations.length < 4) {
+        toast.error('Mínimo de 4 jogadores confirmados necessário');
         return;
       }
 
+      // Se já existe match hoje, deletar antes
+      if (currentMatch) {
+        await supabase
+          .from('matches')
+          .delete()
+          .eq('id', currentMatch.id);
+      }
+
+      // O UPSERT em drawTeamsIntelligent já resolve draw_results duplicado
       const match = await drawTeamsIntelligent();
       return match;
     } catch (error) {
@@ -597,7 +587,7 @@ export const BabaProvider = ({ children }) => {
   useEffect(() => {
     if (currentBaba) {
       loadPlayers(currentBaba.id);
-      loadTodayMatch(currentBaba.id);
+      loadTodayMatch(currentBaba.id); // ⭐ Carregar partida de hoje
     }
   }, [currentBaba]);
 
@@ -625,7 +615,7 @@ export const BabaProvider = ({ children }) => {
     const interval = setInterval(() => {
       const now = new Date();
       setCanConfirm(now < confirmationDeadline);
-    }, 60000);
+    }, 60000); // Atualiza a cada 1 minuto
 
     return () => clearInterval(interval);
   }, [confirmationDeadline]);
