@@ -1,33 +1,28 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useBaba } from '../contexts/BabaContext';
-import { useAuth } from '../contexts/MockAuthContext';
 import { supabase } from '../services/supabase';
-import { Trophy, Users, ArrowLeft, RotateCcw, Crown } from 'lucide-react';
+import { ArrowLeft, Play, Pause, Users } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 const MatchPage = () => {
   const navigate = useNavigate();
-  const { profile } = useAuth();
-  const { 
-    currentBaba, 
-    manualDraw,
-    isDrawing,
-  } = useBaba();
-
-  const [drawResult, setDrawResult] = useState(null);
+  const { currentBaba } = useBaba();
+  
+  const [allTeams, setAllTeams] = useState([]); 
+  const [currentMatch, setCurrentMatch] = useState(null);
+  const [timer, setTimer] = useState(600); // 10 minutos
+  const [isActive, setIsActive] = useState(false);
   const [loading, setLoading] = useState(true);
 
-  // Carregar resultado do sorteio de hoje
+  // 1. Carregar times do draw_results
   useEffect(() => {
-    const loadDrawResult = async () => {
+    const loadTeams = async () => {
       if (!currentBaba) return;
 
       try {
         setLoading(true);
         const today = new Date().toISOString().split('T')[0];
-        
-        console.log(`🔍 Buscando draw_result para baba: ${currentBaba.id}, data: ${today}`);
         
         const { data, error } = await supabase
           .from('draw_results')
@@ -37,246 +32,260 @@ const MatchPage = () => {
           .limit(1)
           .maybeSingle();
 
-        if (error) {
-          console.error('❌ Erro ao buscar draw_result:', error);
-          throw error;
-        }
+        if (error) throw error;
         
-        if (data) {
-          console.log('✅ Draw result encontrado:', data);
-          console.log(`   - ${data.teams?.length || 0} times`);
-          console.log(`   - ${data.reserves?.length || 0} reservas`);
-          setDrawResult(data);
+        if (data && data.teams && data.teams.length >= 2) {
+          setAllTeams(data.teams);
+          setCurrentMatch({
+            teamA: data.teams[0],
+            teamB: data.teams[1],
+            scoreA: 0,
+            scoreB: 0
+          });
         } else {
-          console.log('⚠️ Nenhum sorteio encontrado para hoje');
-          setDrawResult(null);
+          toast.error('Nenhum sorteio encontrado!');
+          navigate('/teams');
         }
       } catch (error) {
-        console.error('Error loading draw result:', error);
-        toast.error('Erro ao carregar times sorteados');
+        console.error('Erro ao carregar times:', error);
+        toast.error('Erro ao carregar times!');
+        navigate('/teams');
       } finally {
         setLoading(false);
       }
     };
 
-    loadDrawResult();
-  }, [currentBaba]);
+    loadTeams();
+  }, [currentBaba, navigate]);
 
-  // Handler do botão sortear novamente
-  const handleRedraw = async () => {
-    const result = await manualDraw();
-    if (result) {
-      // Recarregar página para ver novo sorteio
-      window.location.reload();
+  // 2. Lógica do Cronômetro
+  useEffect(() => {
+    let interval = null;
+    if (isActive && timer > 0) {
+      interval = setInterval(() => {
+        setTimer((prev) => prev - 1);
+      }, 1000);
+    } else if (timer === 0) {
+      setIsActive(false);
+      handleMatchEnd();
     }
+    return () => clearInterval(interval);
+  }, [isActive, timer]);
+
+  // 3. Regra de 2 Gols (Morte Súbita)
+  useEffect(() => {
+    if (currentMatch && (currentMatch.scoreA >= 2 || currentMatch.scoreB >= 2)) {
+      setIsActive(false);
+      handleMatchEnd();
+    }
+  }, [currentMatch?.scoreA, currentMatch?.scoreB]);
+
+  // 4. Finalizar partida e gerenciar fila
+  const handleMatchEnd = () => {
+    if (!currentMatch) return;
+
+    const { scoreA, scoreB, teamA, teamB } = currentMatch;
+    let winner = null;
+    let queue = [...allTeams];
+
+    // Determinar vencedor
+    if (scoreA > scoreB) {
+      winner = "A";
+      toast.success(`${teamA.name} VENCEU!`);
+    } else if (scoreB > scoreA) {
+      winner = "B";
+      toast.success(`${teamB.name} VENCEU!`);
+    } else {
+      toast.error('EMPATE! Saem os dois times.');
+    }
+
+    // Gerenciar a Fila (Quem ganha fica)
+    if (winner === "A") {
+      // Time A fica, Time B vai pro final da fila
+      const loser = queue.splice(1, 1)[0];
+      queue.push(loser);
+    } else if (winner === "B") {
+      // Time B fica, Time A vai pro final da fila
+      const loser = queue.splice(0, 1)[0];
+      queue.push(loser);
+    } else {
+      // Empate: Ambos vão pro final da fila
+      const team1 = queue.shift();
+      const team2 = queue.shift();
+      queue.push(team1, team2);
+    }
+
+    // Verificar se ainda tem times suficientes
+    if (queue.length < 2) {
+      toast.success('Fim das partidas!');
+      setTimeout(() => navigate('/teams'), 2000);
+      return;
+    }
+
+    // Atualizar estado
+    setAllTeams(queue);
+    
+    // Preparar próxima partida
+    setTimer(600);
+    setCurrentMatch({
+      teamA: queue[0],
+      teamB: queue[1],
+      scoreA: 0,
+      scoreB: 0
+    });
   };
 
-  if (loading) {
+  // 5. Formatar tempo
+  const formatTime = (s) => {
+    const mins = Math.floor(s / 60);
+    const secs = s % 60;
+    return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
+  };
+
+  // Loading state
+  if (loading || !currentMatch) {
     return (
-      <div className="min-h-screen bg-black flex flex-col items-center justify-center gap-4">
-        <div className="w-12 h-12 border-4 border-cyan-electric border-t-transparent rounded-full animate-spin"></div>
-        <p className="text-[10px] font-black uppercase tracking-[0.3em] text-white/40">
-          Carregando Times...
-        </p>
+      <div className="min-h-screen bg-black flex items-center justify-center text-white/20 uppercase font-black italic">
+        Carregando Partida...
       </div>
     );
   }
-
-  if (!drawResult) {
-    return (
-      <div className="min-h-screen bg-black text-white p-6">
-        <div className="max-w-4xl mx-auto space-y-6">
-          {/* Header */}
-          <div className="flex items-center justify-between">
-            <button
-              onClick={() => navigate('/dashboard')}
-              className="flex items-center gap-2 text-white/60 hover:text-white transition-all"
-            >
-              <ArrowLeft size={20} />
-              <span className="text-xs font-black uppercase">Voltar</span>
-            </button>
-          </div>
-
-          {/* Empty State */}
-          <div className="text-center py-20 space-y-6">
-            <div className="w-24 h-24 bg-white/5 rounded-full flex items-center justify-center mx-auto border border-dashed border-white/20">
-              <Trophy className="opacity-20" size={40} />
-            </div>
-            <div>
-              <p className="text-xl font-black opacity-40 uppercase tracking-widest mb-2">
-                Nenhum Sorteio Hoje
-              </p>
-              <p className="text-sm text-white/40">
-                Aguarde o sorteio automático ou sorteie manualmente
-              </p>
-            </div>
-            {currentBaba?.president_id === profile?.id && (
-              <button
-                onClick={handleRedraw}
-                disabled={isDrawing}
-                className="px-8 py-4 bg-cyan-electric text-black font-black uppercase text-xs rounded-2xl shadow-[0_10px_40px_rgba(0,255,242,0.2)] hover:scale-[1.02] active:scale-95 transition-all disabled:opacity-50"
-              >
-                {isDrawing ? 'Sorteando...' : 'Sortear Times'}
-              </button>
-            )}
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  const teams = drawResult.teams || [];
-  const reserves = drawResult.reserves || [];
-  const isPresident = currentBaba?.president_id === profile?.id;
-  const totalPlayers = teams.reduce((sum, t) => sum + (t.players?.length || 0), 0);
-
-  // Cores para os times
-  const colors = [
-    { border: 'border-cyan-electric/30', text: 'text-cyan-electric', bg: 'bg-cyan-electric/10' },
-    { border: 'border-yellow-500/30', text: 'text-yellow-500', bg: 'bg-yellow-500/10' },
-    { border: 'border-green-500/30', text: 'text-green-500', bg: 'bg-green-500/10' },
-    { border: 'border-purple-500/30', text: 'text-purple-500', bg: 'bg-purple-500/10' },
-    { border: 'border-pink-500/30', text: 'text-pink-500', bg: 'bg-pink-500/10' },
-  ];
 
   return (
-    <div className="min-h-screen bg-black text-white p-6">
-      <div className="max-w-6xl mx-auto space-y-6">
+    <div className="min-h-screen bg-black text-white p-5 font-sans">
+      <div className="max-w-md mx-auto space-y-6">
+        
         {/* Header */}
-        <div className="flex items-center justify-between">
-          <button
-            onClick={() => navigate('/dashboard')}
-            className="flex items-center gap-2 text-white/60 hover:text-white transition-all"
+        <div className="flex justify-between items-center text-[10px] font-black opacity-40">
+          <button 
+            onClick={() => navigate('/teams')}
+            className="hover:text-cyan-electric transition-colors"
           >
-            <ArrowLeft size={20} />
-            <span className="text-xs font-black uppercase">Voltar</span>
+            ← VER TIMES
+          </button>
+          <span className="text-cyan-electric italic tracking-widest">JOGO AO VIVO</span>
+        </div>
+
+        {/* Placar Principal */}
+        <div className="card-glass p-8 border border-white/10 text-center relative overflow-hidden rounded-[2.5rem]">
+          
+          {/* Cronômetro */}
+          <div className={`text-7xl font-black mb-6 font-mono tracking-tighter transition-colors ${
+            timer < 60 ? 'text-red-500' : 'text-white'
+          }`}>
+            {formatTime(timer)}
+          </div>
+          
+          {/* Placar */}
+          <div className="flex justify-between items-center gap-4">
+            {/* Time A */}
+            <div className="flex-1">
+              <p className="text-[10px] font-black mb-2 text-cyan-electric uppercase truncate tracking-tighter">
+                {currentMatch.teamA.name}
+              </p>
+              <button 
+                onClick={() => setCurrentMatch({...currentMatch, scoreA: currentMatch.scoreA + 1})}
+                className="text-6xl font-black w-full py-6 bg-white/5 rounded-3xl border border-white/10 hover:bg-white/10 active:scale-90 transition-all shadow-inner"
+              >
+                {currentMatch.scoreA}
+              </button>
+            </div>
+            
+            {/* VS */}
+            <div className="text-xl font-black opacity-10 italic mt-6">VS</div>
+
+            {/* Time B */}
+            <div className="flex-1">
+              <p className="text-[10px] font-black mb-2 text-yellow-500 uppercase truncate tracking-tighter">
+                {currentMatch.teamB.name}
+              </p>
+              <button 
+                onClick={() => setCurrentMatch({...currentMatch, scoreB: currentMatch.scoreB + 1})}
+                className="text-6xl font-black w-full py-6 bg-white/5 rounded-3xl border border-white/10 hover:bg-white/10 active:scale-90 transition-all shadow-inner"
+              >
+                {currentMatch.scoreB}
+              </button>
+            </div>
+          </div>
+
+          {/* Botão Cronômetro */}
+          <button 
+            onClick={() => setIsActive(!isActive)}
+            className={`mt-10 w-full py-4 rounded-2xl font-black text-xs uppercase tracking-[4px] transition-all ${
+              isActive 
+                ? 'bg-red-500/10 text-red-500 border border-red-500/20' 
+                : 'bg-cyan-electric text-black shadow-[0_0_20px_rgba(0,242,255,0.2)]'
+            }`}
+          >
+            {isActive ? '⏸ PAUSAR JOGO' : '▶ INICIAR CRONÔMETRO'}
           </button>
 
-          {isPresident && (
-            <button
-              onClick={handleRedraw}
-              disabled={isDrawing}
-              className="flex items-center gap-2 px-4 py-2 bg-white/5 border border-cyan-electric/30 rounded-xl text-cyan-electric text-xs font-black uppercase hover:bg-cyan-electric/10 transition-all disabled:opacity-50"
-            >
-              <RotateCcw size={16} />
-              {isDrawing ? 'Sorteando...' : 'Sortear Novamente'}
-            </button>
+          {/* Botão Finalizar Manualmente */}
+          <button
+            onClick={handleMatchEnd}
+            className="mt-3 w-full py-3 bg-white/5 border border-white/10 rounded-xl font-black text-xs uppercase tracking-widest text-white/50 hover:text-white hover:bg-white/10 transition-all"
+          >
+            Finalizar Partida
+          </button>
+        </div>
+
+        {/* Times Jogando Agora */}
+        <div className="card-glass p-4 border border-white/5 rounded-2xl">
+          <p className="text-[10px] font-black opacity-40 mb-3 uppercase tracking-widest">Jogando Agora:</p>
+          <div className="grid grid-cols-2 gap-4">
+            {/* Jogadores Time A */}
+            <div>
+              <p className="text-xs font-black text-cyan-electric mb-2">{currentMatch.teamA.name}</p>
+              <div className="space-y-1">
+                {currentMatch.teamA.players?.map((player, i) => (
+                  <div key={i} className="text-[10px] opacity-60 flex items-center gap-1">
+                    <span className={`w-1.5 h-1.5 rounded-full ${player.position === 'goleiro' ? 'bg-green-500' : 'bg-cyan-electric'}`}></span>
+                    {player.name}
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Jogadores Time B */}
+            <div>
+              <p className="text-xs font-black text-yellow-500 mb-2">{currentMatch.teamB.name}</p>
+              <div className="space-y-1">
+                {currentMatch.teamB.players?.map((player, i) => (
+                  <div key={i} className="text-[10px] opacity-60 flex items-center gap-1">
+                    <span className={`w-1.5 h-1.5 rounded-full ${player.position === 'goleiro' ? 'bg-green-500' : 'bg-yellow-500'}`}></span>
+                    {player.name}
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Fila de Espera */}
+        <div className="space-y-3">
+          <h3 className="text-[10px] font-black opacity-30 italic px-2 uppercase tracking-[0.2em]">
+            Próximo na Fila:
+          </h3>
+          {allTeams.length > 2 ? (
+            <div className="bg-white/5 p-5 rounded-[1.5rem] border border-white/5 flex justify-between items-center">
+              <span className="font-black text-sm text-cyan-electric italic uppercase">
+                {allTeams[2].name}
+              </span>
+              <span className="text-[8px] opacity-40 font-black uppercase tracking-tighter bg-white/10 px-2 py-1 rounded">
+                Aguardando
+              </span>
+            </div>
+          ) : (
+            <p className="text-[10px] opacity-20 text-center uppercase font-black py-4 border border-dashed border-white/10 rounded-2xl">
+              Apenas dois times em campo
+            </p>
           )}
         </div>
 
-        {/* Título */}
-        <div className="text-center space-y-2">
-          <div className="flex items-center justify-center gap-3">
-            <Trophy className="text-cyan-electric" size={32} />
-            <h1 className="text-3xl font-black uppercase italic">Times Sorteados</h1>
-          </div>
-          <p className="text-sm text-white/60 uppercase tracking-widest">
-            {currentBaba?.name}
-          </p>
-          <div className="flex items-center justify-center gap-4 text-xs text-white/40">
-            <span>{teams.length} Times</span>
-            <span>•</span>
-            <span>{totalPlayers} Jogadores</span>
-            {reserves.length > 0 && (
-              <>
-                <span>•</span>
-                <span>{reserves.length} Reservas</span>
-              </>
-            )}
-          </div>
-        </div>
-
-        {/* Grid de Times */}
-        <div className={`grid gap-6 ${
-          teams.length === 2 ? 'grid-cols-1 md:grid-cols-2' : 
-          teams.length === 3 ? 'grid-cols-1 md:grid-cols-3' : 
-          'grid-cols-1 md:grid-cols-2 lg:grid-cols-3'
-        }`}>
-          {teams.map((team, index) => {
-            const color = colors[index % colors.length];
-            const teamPlayers = team.players || [];
-
-            return (
-              <div key={index} className={`card-glass p-6 rounded-[2rem] border-2 ${color.border}`}>
-                {/* Header do Time */}
-                <div className="flex items-center justify-between mb-6">
-                  <h2 className={`text-2xl font-black uppercase italic ${color.text}`}>
-                    {team.name}
-                  </h2>
-                  <div className={`flex items-center gap-2 ${color.bg} px-3 py-1 rounded-xl`}>
-                    <Users size={16} className={color.text} />
-                    <span className={`text-sm font-black ${color.text}`}>
-                      {teamPlayers.length}
-                    </span>
-                  </div>
-                </div>
-
-                {/* Jogadores */}
-                <div className="space-y-3">
-                  {teamPlayers.map((player, idx) => (
-                    <div
-                      key={player.id || idx}
-                      className="flex items-center gap-3 p-3 bg-white/5 rounded-xl border border-white/5"
-                    >
-                      <span className="text-lg font-black text-white/40 w-6">
-                        {idx + 1}
-                      </span>
-                      <div className="flex-1">
-                        <p className="text-sm font-bold uppercase">{player.name}</p>
-                        <p className="text-[9px] text-white/40 uppercase">
-                          {player.position}
-                        </p>
-                      </div>
-                      {player.position === 'goleiro' && (
-                        <div className="w-2 h-2 bg-yellow-400 rounded-full"></div>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            );
-          })}
-        </div>
-
-        {/* Reservas */}
-        {reserves.length > 0 && (
-          <div className="card-glass p-6 rounded-[2rem] border border-white/10">
-            <div className="flex items-center gap-2 mb-4">
-              <Users className="text-white/40" size={20} />
-              <h3 className="text-lg font-black uppercase text-white/60">
-                Jogadores Reservas ({reserves.length})
-              </h3>
-            </div>
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
-              {reserves.map((player, idx) => (
-                <div
-                  key={player.id || idx}
-                  className="flex items-center gap-2 p-3 bg-white/5 rounded-xl border border-white/5"
-                >
-                  <span className="text-sm font-black text-white/20">R{idx + 1}</span>
-                  <div className="flex-1">
-                    <p className="text-xs font-bold">{player.name}</p>
-                    <p className="text-[8px] text-white/40 uppercase">{player.position}</p>
-                  </div>
-                  {player.position === 'goleiro' && (
-                    <div className="w-1.5 h-1.5 bg-yellow-400 rounded-full opacity-50"></div>
-                  )}
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* Info adicional */}
-        <div className="card-glass p-4 rounded-2xl text-center">
-          <p className="text-xs text-white/60">
-            Sorteado em: <span className="text-white font-black">
-              {new Date(drawResult.created_at).toLocaleString('pt-BR')}
-            </span>
-          </p>
-          <p className="text-[9px] text-white/40 mt-1">
-            {drawResult.strategy === 'reserve' ? 'Jogadores extras como reservas' : 'Times incompletos permitidos'}
-          </p>
+        {/* Regras */}
+        <div className="text-center text-[9px] opacity-20 uppercase font-black tracking-wider">
+          <p>Regras: 2 Gols ou 10 Minutos</p>
+          <p className="mt-1">Quem Ganha Fica • Empate Sai os Dois</p>
         </div>
       </div>
     </div>
