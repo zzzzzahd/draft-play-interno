@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useBaba } from '../contexts/BabaContext';
 import { supabase } from '../services/supabase';
-import { ArrowLeft, Trophy, Target, Handshake, Award, Calendar } from 'lucide-react';
+import { ArrowLeft, Trophy, Target, UserPlus, Award, Calendar } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 const RankingsPage = () => {
@@ -213,7 +213,7 @@ const RankingsPage = () => {
                 : 'border-white/10 bg-white/5 hover:bg-white/10'
             }`}
           >
-            <Handshake className={`mx-auto mb-2 ${activeTab === 'garcons' ? 'text-green-500' : 'text-white/40'}`} size={24} />
+            <UserPlus className={`mx-auto mb-2 ${activeTab === 'garcons' ? 'text-green-500' : 'text-white/40'}`} size={24} />
             <p className={`text-xs font-black uppercase ${activeTab === 'garcons' ? 'text-green-500' : 'text-white/60'}`}>
               Garçons
             </p>
