@@ -2,27 +2,74 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useBaba } from '../contexts/BabaContext';
 import { useAuth } from '../contexts/MockAuthContext';
+import { supabase } from '../services/supabase';
 import { Trophy, Users, ArrowLeft, RotateCcw, Crown } from 'lucide-react';
+import toast from 'react-hot-toast';
 
 const MatchPage = () => {
   const navigate = useNavigate();
   const { profile } = useAuth();
   const { 
     currentBaba, 
-    currentMatch, 
-    matchPlayers,
-    loadTodayMatch,
     manualDraw,
     isDrawing,
-    loading 
   } = useBaba();
 
-  // ✅ CORRIGIDO: Remover loadTodayMatch das dependências
+  const [drawResult, setDrawResult] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  // Carregar resultado do sorteio de hoje
   useEffect(() => {
-    if (currentBaba) {
-      loadTodayMatch(currentBaba.id);
+    const loadDrawResult = async () => {
+      if (!currentBaba) return;
+
+      try {
+        setLoading(true);
+        const today = new Date().toISOString().split('T')[0];
+        
+        console.log(`🔍 Buscando draw_result para baba: ${currentBaba.id}, data: ${today}`);
+        
+        const { data, error } = await supabase
+          .from('draw_results')
+          .select('*')
+          .eq('baba_id', currentBaba.id)
+          .eq('draw_date', today)
+          .limit(1)
+          .maybeSingle();
+
+        if (error) {
+          console.error('❌ Erro ao buscar draw_result:', error);
+          throw error;
+        }
+        
+        if (data) {
+          console.log('✅ Draw result encontrado:', data);
+          console.log(`   - ${data.teams?.length || 0} times`);
+          console.log(`   - ${data.reserves?.length || 0} reservas`);
+          setDrawResult(data);
+        } else {
+          console.log('⚠️ Nenhum sorteio encontrado para hoje');
+          setDrawResult(null);
+        }
+      } catch (error) {
+        console.error('Error loading draw result:', error);
+        toast.error('Erro ao carregar times sorteados');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadDrawResult();
+  }, [currentBaba]);
+
+  // Handler do botão sortear novamente
+  const handleRedraw = async () => {
+    const result = await manualDraw();
+    if (result) {
+      // Recarregar página para ver novo sorteio
+      window.location.reload();
     }
-  }, [currentBaba]); // ✅ Só executa quando currentBaba muda
+  };
 
   if (loading) {
     return (
@@ -35,34 +82,62 @@ const MatchPage = () => {
     );
   }
 
-  if (!currentMatch) {
+  if (!drawResult) {
     return (
-      <div className="min-h-screen bg-black flex flex-col items-center justify-center gap-6 p-6">
-        <Trophy className="text-white/20" size={64} />
-        <div className="text-center space-y-3">
-          <h2 className="text-2xl font-black uppercase text-white/60">
-            Nenhum Sorteio Hoje
-          </h2>
-          <p className="text-sm text-white/40 max-w-md">
-            O sorteio automático acontece quando o prazo de confirmação termina.
-          </p>
+      <div className="min-h-screen bg-black text-white p-6">
+        <div className="max-w-4xl mx-auto space-y-6">
+          {/* Header */}
+          <div className="flex items-center justify-between">
+            <button
+              onClick={() => navigate('/dashboard')}
+              className="flex items-center gap-2 text-white/60 hover:text-white transition-all"
+            >
+              <ArrowLeft size={20} />
+              <span className="text-xs font-black uppercase">Voltar</span>
+            </button>
+          </div>
+
+          {/* Empty State */}
+          <div className="text-center py-20 space-y-6">
+            <div className="w-24 h-24 bg-white/5 rounded-full flex items-center justify-center mx-auto border border-dashed border-white/20">
+              <Trophy className="opacity-20" size={40} />
+            </div>
+            <div>
+              <p className="text-xl font-black opacity-40 uppercase tracking-widest mb-2">
+                Nenhum Sorteio Hoje
+              </p>
+              <p className="text-sm text-white/40">
+                Aguarde o sorteio automático ou sorteie manualmente
+              </p>
+            </div>
+            {currentBaba?.president_id === profile?.id && (
+              <button
+                onClick={handleRedraw}
+                disabled={isDrawing}
+                className="px-8 py-4 bg-cyan-electric text-black font-black uppercase text-xs rounded-2xl shadow-[0_10px_40px_rgba(0,255,242,0.2)] hover:scale-[1.02] active:scale-95 transition-all disabled:opacity-50"
+              >
+                {isDrawing ? 'Sorteando...' : 'Sortear Times'}
+              </button>
+            )}
+          </div>
         </div>
-        <button
-          onClick={() => navigate('/dashboard')}
-          className="flex items-center gap-2 px-6 py-3 bg-cyan-electric text-black rounded-xl font-black text-sm uppercase"
-        >
-          <ArrowLeft size={16} />
-          Voltar ao Dashboard
-        </button>
       </div>
     );
   }
 
+  const teams = drawResult.teams || [];
+  const reserves = drawResult.reserves || [];
   const isPresident = currentBaba?.president_id === profile?.id;
+  const totalPlayers = teams.reduce((sum, t) => sum + (t.players?.length || 0), 0);
 
-  // Organizar jogadores por time
-  const teamAPlayers = matchPlayers.filter(mp => mp.team === 'Team A');
-  const teamBPlayers = matchPlayers.filter(mp => mp.team === 'Team B');
+  // Cores para os times
+  const colors = [
+    { border: 'border-cyan-electric/30', text: 'text-cyan-electric', bg: 'bg-cyan-electric/10' },
+    { border: 'border-yellow-500/30', text: 'text-yellow-500', bg: 'bg-yellow-500/10' },
+    { border: 'border-green-500/30', text: 'text-green-500', bg: 'bg-green-500/10' },
+    { border: 'border-purple-500/30', text: 'text-purple-500', bg: 'bg-purple-500/10' },
+    { border: 'border-pink-500/30', text: 'text-pink-500', bg: 'bg-pink-500/10' },
+  ];
 
   return (
     <div className="min-h-screen bg-black text-white p-6">
@@ -79,7 +154,7 @@ const MatchPage = () => {
 
           {isPresident && (
             <button
-              onClick={manualDraw}
+              onClick={handleRedraw}
               disabled={isDrawing}
               className="flex items-center gap-2 px-4 py-2 bg-white/5 border border-cyan-electric/30 rounded-xl text-cyan-electric text-xs font-black uppercase hover:bg-cyan-electric/10 transition-all disabled:opacity-50"
             >
@@ -99,98 +174,108 @@ const MatchPage = () => {
             {currentBaba?.name}
           </p>
           <div className="flex items-center justify-center gap-4 text-xs text-white/40">
-            <span>{currentMatch.team_a_name} vs {currentMatch.team_b_name}</span>
+            <span>{teams.length} Times</span>
             <span>•</span>
-            <span>{matchPlayers.length} Jogadores</span>
+            <span>{totalPlayers} Jogadores</span>
+            {reserves.length > 0 && (
+              <>
+                <span>•</span>
+                <span>{reserves.length} Reservas</span>
+              </>
+            )}
           </div>
         </div>
 
         {/* Grid de Times */}
-        <div className="grid gap-6 grid-cols-1 md:grid-cols-2">
-          {/* Time A */}
-          <div className="card-glass p-6 rounded-[2rem] border-2 border-cyan-electric/30">
-            <div className="flex items-center justify-between mb-6">
-              <h2 className="text-2xl font-black uppercase italic text-cyan-electric">
-                {currentMatch.team_a_name}
-              </h2>
-              <div className="flex items-center gap-2 bg-cyan-electric/10 px-3 py-1 rounded-xl">
-                <Users size={16} className="text-cyan-electric" />
-                <span className="text-sm font-black text-cyan-electric">
-                  {teamAPlayers.length}
-                </span>
-              </div>
-            </div>
+        <div className={`grid gap-6 ${
+          teams.length === 2 ? 'grid-cols-1 md:grid-cols-2' : 
+          teams.length === 3 ? 'grid-cols-1 md:grid-cols-3' : 
+          'grid-cols-1 md:grid-cols-2 lg:grid-cols-3'
+        }`}>
+          {teams.map((team, index) => {
+            const color = colors[index % colors.length];
+            const teamPlayers = team.players || [];
 
-            <div className="space-y-3">
-              {teamAPlayers.map((mp, idx) => (
-                <div
-                  key={mp.id}
-                  className="flex items-center gap-3 p-3 bg-white/5 rounded-xl border border-white/5"
-                >
-                  <span className="text-lg font-black text-white/40 w-6">
-                    {idx + 1}
-                  </span>
-                  <div className="flex-1">
-                    <p className="text-sm font-bold uppercase">{mp.player?.name}</p>
-                    <p className="text-[9px] text-white/40 uppercase">
-                      {mp.position}
-                    </p>
+            return (
+              <div key={index} className={`card-glass p-6 rounded-[2rem] border-2 ${color.border}`}>
+                {/* Header do Time */}
+                <div className="flex items-center justify-between mb-6">
+                  <h2 className={`text-2xl font-black uppercase italic ${color.text}`}>
+                    {team.name}
+                  </h2>
+                  <div className={`flex items-center gap-2 ${color.bg} px-3 py-1 rounded-xl`}>
+                    <Users size={16} className={color.text} />
+                    <span className={`text-sm font-black ${color.text}`}>
+                      {teamPlayers.length}
+                    </span>
                   </div>
-                  {mp.position === 'goleiro' && (
-                    <div className="w-2 h-2 bg-yellow-400 rounded-full"></div>
-                  )}
                 </div>
-              ))}
-            </div>
-          </div>
 
-          {/* Time B */}
-          <div className="card-glass p-6 rounded-[2rem] border-2 border-yellow-500/30">
-            <div className="flex items-center justify-between mb-6">
-              <h2 className="text-2xl font-black uppercase italic text-yellow-500">
-                {currentMatch.team_b_name}
-              </h2>
-              <div className="flex items-center gap-2 bg-yellow-500/10 px-3 py-1 rounded-xl">
-                <Users size={16} className="text-yellow-500" />
-                <span className="text-sm font-black text-yellow-500">
-                  {teamBPlayers.length}
-                </span>
+                {/* Jogadores */}
+                <div className="space-y-3">
+                  {teamPlayers.map((player, idx) => (
+                    <div
+                      key={player.id || idx}
+                      className="flex items-center gap-3 p-3 bg-white/5 rounded-xl border border-white/5"
+                    >
+                      <span className="text-lg font-black text-white/40 w-6">
+                        {idx + 1}
+                      </span>
+                      <div className="flex-1">
+                        <p className="text-sm font-bold uppercase">{player.name}</p>
+                        <p className="text-[9px] text-white/40 uppercase">
+                          {player.position}
+                        </p>
+                      </div>
+                      {player.position === 'goleiro' && (
+                        <div className="w-2 h-2 bg-yellow-400 rounded-full"></div>
+                      )}
+                    </div>
+                  ))}
+                </div>
               </div>
-            </div>
-
-            <div className="space-y-3">
-              {teamBPlayers.map((mp, idx) => (
-                <div
-                  key={mp.id}
-                  className="flex items-center gap-3 p-3 bg-white/5 rounded-xl border border-white/5"
-                >
-                  <span className="text-lg font-black text-white/40 w-6">
-                    {idx + 1}
-                  </span>
-                  <div className="flex-1">
-                    <p className="text-sm font-bold uppercase">{mp.player?.name}</p>
-                    <p className="text-[9px] text-white/40 uppercase">
-                      {mp.position}
-                    </p>
-                  </div>
-                  {mp.position === 'goleiro' && (
-                    <div className="w-2 h-2 bg-yellow-400 rounded-full"></div>
-                  )}
-                </div>
-              ))}
-            </div>
-          </div>
+            );
+          })}
         </div>
+
+        {/* Reservas */}
+        {reserves.length > 0 && (
+          <div className="card-glass p-6 rounded-[2rem] border border-white/10">
+            <div className="flex items-center gap-2 mb-4">
+              <Users className="text-white/40" size={20} />
+              <h3 className="text-lg font-black uppercase text-white/60">
+                Jogadores Reservas ({reserves.length})
+              </h3>
+            </div>
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+              {reserves.map((player, idx) => (
+                <div
+                  key={player.id || idx}
+                  className="flex items-center gap-2 p-3 bg-white/5 rounded-xl border border-white/5"
+                >
+                  <span className="text-sm font-black text-white/20">R{idx + 1}</span>
+                  <div className="flex-1">
+                    <p className="text-xs font-bold">{player.name}</p>
+                    <p className="text-[8px] text-white/40 uppercase">{player.position}</p>
+                  </div>
+                  {player.position === 'goleiro' && (
+                    <div className="w-1.5 h-1.5 bg-yellow-400 rounded-full opacity-50"></div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* Info adicional */}
         <div className="card-glass p-4 rounded-2xl text-center">
           <p className="text-xs text-white/60">
-            Horário: <span className="text-white font-black">
-              {currentBaba?.game_time || '--:--'}
+            Sorteado em: <span className="text-white font-black">
+              {new Date(drawResult.created_at).toLocaleString('pt-BR')}
             </span>
           </p>
           <p className="text-[9px] text-white/40 mt-1">
-            Sorteio automático baseado nas confirmações de presença
+            {drawResult.strategy === 'reserve' ? 'Jogadores extras como reservas' : 'Times incompletos permitidos'}
           </p>
         </div>
       </div>
