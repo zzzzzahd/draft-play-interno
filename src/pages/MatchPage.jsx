@@ -108,13 +108,13 @@ const MatchPage = () => {
           ...teamA.players.map(p => ({
             match_id: newMatch.id,
             player_id: p.id,
-            team: 'A',
+            team: 'Team A',
             position: p.position || 'linha'
           })),
           ...teamB.players.map(p => ({
             match_id: newMatch.id,
             player_id: p.id,
-            team: 'B',
+            team: 'Team B',
             position: p.position || 'linha'
           }))
         ];
@@ -160,7 +160,7 @@ const MatchPage = () => {
     setShowGoalModal(true);
   };
 
-  // ⭐ NOVO: Salvar gol com stats
+  // ⭐ NOVO: Salvar gol com stats - CORRIGIDO!
   const handleSaveGoal = async () => {
     if (!selectedScorer) {
       toast.error('Selecione quem fez o gol!');
@@ -168,20 +168,39 @@ const MatchPage = () => {
     }
 
     try {
-      // Atualizar gols do jogador
+      // ✅ BUSCAR gols atuais do jogador
+      const { data: playerData, error: fetchError } = await supabase
+        .from('match_players')
+        .select('goals, assists')
+        .eq('match_id', matchId)
+        .eq('player_id', selectedScorer)
+        .single();
+
+      if (fetchError) throw fetchError;
+
+      // ✅ ATUALIZAR gols do jogador (incrementa +1)
       const { error: goalError } = await supabase
         .from('match_players')
-        .update({ goals: supabase.raw('goals + 1') })
+        .update({ goals: (playerData?.goals || 0) + 1 })
         .eq('match_id', matchId)
         .eq('player_id', selectedScorer);
 
       if (goalError) throw goalError;
 
-      // Atualizar assistência (se houver)
+      // ✅ ATUALIZAR assistência (se houver)
       if (selectedAssist) {
+        const { data: assistData, error: fetchAssistError } = await supabase
+          .from('match_players')
+          .select('assists')
+          .eq('match_id', matchId)
+          .eq('player_id', selectedAssist)
+          .single();
+
+        if (fetchAssistError) throw fetchAssistError;
+
         const { error: assistError } = await supabase
           .from('match_players')
-          .update({ assists: supabase.raw('assists + 1') })
+          .update({ assists: (assistData?.assists || 0) + 1 })
           .eq('match_id', matchId)
           .eq('player_id', selectedAssist);
 
