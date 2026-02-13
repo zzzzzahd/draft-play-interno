@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useBaba } from '../contexts/BabaContext';
 import { supabase } from '../services/supabase';
-import { ArrowLeft, Play, Pause, Users, X, Target, Handshake } from 'lucide-react';
+import { ArrowLeft, Play, Pause, Users, X, Target, UserPlus } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 const MatchPage = () => {
@@ -456,7 +456,7 @@ const MatchPage = () => {
             {/* Assistência */}
             <div>
               <label className="block text-xs font-black uppercase tracking-wider text-white/60 mb-2 flex items-center gap-2">
-                <Handshake size={14} />
+                <UserPlus size={14} />
                 Assistência de? (opcional)
               </label>
               <select
