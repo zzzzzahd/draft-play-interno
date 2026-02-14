@@ -3,14 +3,15 @@ import React, { createContext, useContext } from 'react';
 const MockAuthContext = createContext();
 
 export const MockAuthProvider = ({ children }) => {
-  // Usuário fixo sempre autenticado com UUID válido
+  // ⚠️ IMPORTANTE: User ID real do banco (do Supabase Authentication)
+  // Este ID deve corresponder ao president_id do baba no banco
   const user = {
-    id: '00000000-0000-0000-0000-000000000001',
+    id: 'e83cdb27-0040-44d1-b998-ac8d879f2b24', // ⭐ USER_ID REAL DO BANCO
     email: 'zharickdiias@gmail.com',
   };
 
   const profile = {
-    id: '00000000-0000-0000-0000-000000000001',
+    id: 'e83cdb27-0040-44d1-b998-ac8d879f2b24', // ⭐ MESMO USER_ID
     name: 'Zharick Dias',
     email: 'zharickdiias@gmail.com',
     avatar_url: null,
