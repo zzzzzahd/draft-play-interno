@@ -418,6 +418,13 @@ export const BabaProvider = ({ children }) => {
   const createBaba = async (babaData) => {
     try {
       setLoading(true);
+      
+      console.log('🔵 Tentando criar baba...', {
+        babaData,
+        userId: user.id,
+        userName: profile?.name
+      });
+      
       const { data, error } = await supabase
         .from('babas')
         .insert([{
@@ -427,7 +434,19 @@ export const BabaProvider = ({ children }) => {
         .select()
         .single();
 
-      if (error) throw error;
+      console.log('📊 Resposta do INSERT:', { data, error });
+
+      if (error) {
+        console.error('❌ ERRO NO INSERT:', error);
+        throw error;
+      }
+
+      if (!data) {
+        console.error('❌ INSERT retornou vazio!');
+        throw new Error('Insert retornou vazio');
+      }
+
+      console.log('✅ Baba criado no banco:', data);
 
       // Adicionar presidente como jogador automaticamente
       const { error: playerError } = await supabase
@@ -440,7 +459,9 @@ export const BabaProvider = ({ children }) => {
         }]);
 
       if (playerError) {
-        console.error('Error adding president as player:', playerError);
+        console.error('⚠️ Erro ao adicionar presidente como jogador:', playerError);
+      } else {
+        console.log('✅ Presidente adicionado como jogador');
       }
 
       toast.success('Baba criado com sucesso!');
@@ -448,7 +469,13 @@ export const BabaProvider = ({ children }) => {
       setCurrentBaba(data);
       return data;
     } catch (error) {
-      console.error('Error creating baba:', error);
+      console.error('💥 ERRO CRÍTICO ao criar baba:', error);
+      console.error('Detalhes:', {
+        message: error.message,
+        code: error.code,
+        details: error.details,
+        hint: error.hint
+      });
       toast.error('Erro ao criar baba');
       return null;
     } finally {
