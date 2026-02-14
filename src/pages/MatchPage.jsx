@@ -68,69 +68,94 @@ const MatchPage = () => {
     loadTeams();
   }, [currentBaba, navigate]);
 
-  // ⭐ NOVO: Buscar ou criar match
-  const loadOrCreateMatch = async (teamA, teamB) => {
-    try {
-      const today = new Date().toISOString().split('T')[0];
-      
-      // Buscar match existente
-      const { data: existingMatch, error: searchError } = await supabase
+// ⭐ CORRIGIDO: Buscar ou criar match
+const loadOrCreateMatch = async (teamA, teamB) => {
+  try {
+    const today = new Date().toISOString().split('T')[0];
+    
+    // Buscar match existente
+    const { data: existingMatch, error: searchError } = await supabase
+      .from('matches')
+      .select('id')
+      .eq('baba_id', currentBaba.id)
+      .eq('match_date', today)
+      .limit(1)
+      .maybeSingle();
+
+    if (searchError && searchError.code !== 'PGRST116') throw searchError;
+
+    let matchId;
+
+    if (existingMatch) {
+      matchId = existingMatch.id;
+      console.log('✅ Match já existe:', matchId);
+    } else {
+      // Criar novo match
+      const { data: newMatch, error: createError } = await supabase
         .from('matches')
-        .select('id')
-        .eq('baba_id', currentBaba.id)
-        .eq('match_date', today)
-        .limit(1)
-        .maybeSingle();
+        .insert([{
+          baba_id: currentBaba.id,
+          match_date: today,
+          team_a_name: teamA.name,
+          team_b_name: teamB.name,
+          status: 'in_progress'
+        }])
+        .select()
+        .single();
 
-      if (searchError && searchError.code !== 'PGRST116') throw searchError;
-
-      if (existingMatch) {
-        setMatchId(existingMatch.id);
-      } else {
-        // Criar novo match
-        const { data: newMatch, error: createError } = await supabase
-          .from('matches')
-          .insert([{
-            baba_id: currentBaba.id,
-            match_date: today,
-            team_a_name: teamA.name,
-            team_b_name: teamB.name,
-            status: 'in_progress'
-          }])
-          .select()
-          .single();
-
-        if (createError) throw createError;
-        setMatchId(newMatch.id);
-
-        // Criar registros de match_players para todos os jogadores
-        const matchPlayers = [
-          ...teamA.players.map(p => ({
-            match_id: newMatch.id,
-            player_id: p.id,
-            team: 'Team A',
-            position: p.position || 'linha'
-          })),
-          ...teamB.players.map(p => ({
-            match_id: newMatch.id,
-            player_id: p.id,
-            team: 'Team B',
-            position: p.position || 'linha'
-          }))
-        ];
-
-        const { error: playersError } = await supabase
-          .from('match_players')
-          .insert(matchPlayers);
-
-        if (playersError) throw playersError;
-      }
-    } catch (error) {
-      console.error('Erro ao criar/carregar match:', error);
+      if (createError) throw createError;
+      matchId = newMatch.id;
+      console.log('✅ Match criado:', matchId);
     }
-  };
 
-  // 2. Lógica do Cronômetro
+    setMatchId(matchId);
+
+    // ⭐ SEMPRE verificar e criar registros de match_players
+    const matchPlayers = [
+      ...teamA.players.map(p => ({
+        match_id: matchId,
+        player_id: p.id,
+        team: 'Team A',
+        position: p.position || 'linha',
+        goals: 0,
+        assists: 0
+      })),
+      ...teamB.players.map(p => ({
+        match_id: matchId,
+        player_id: p.id,
+        team: 'Team B',
+        position: p.position || 'linha',
+        goals: 0,
+        assists: 0
+      }))
+    ];
+
+    // Verificar quais jogadores já existem
+    const { data: existingPlayers } = await supabase
+      .from('match_players')
+      .select('player_id')
+      .eq('match_id', matchId);
+
+    const existingPlayerIds = existingPlayers?.map(p => p.player_id) || [];
+
+    // Inserir apenas jogadores que ainda não existem
+    const newPlayers = matchPlayers.filter(mp => !existingPlayerIds.includes(mp.player_id));
+
+    if (newPlayers.length > 0) {
+      const { error: playersError } = await supabase
+        .from('match_players')
+        .insert(newPlayers);
+
+      if (playersError) throw playersError;
+      console.log(`✅ ${newPlayers.length} jogadores adicionados ao match`);
+    } else {
+      console.log('✅ Todos os jogadores já estão no match');
+    }
+
+  } catch (error) {
+    console.error('Erro ao criar/carregar match:', error);
+  }
+};
   useEffect(() => {
     let interval = null;
     if (isActive && timer > 0) {
