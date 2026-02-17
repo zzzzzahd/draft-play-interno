@@ -50,7 +50,7 @@ const ProfilePage = () => {
       setLoading(true);
 
       const { data, error } = await supabase
-        .from('users')
+        .from('profiles')
         .update({
           name: formData.name.trim(),
           age: formData.age ? parseInt(formData.age) : null,
