@@ -3,15 +3,16 @@ import React, { createContext, useContext } from 'react';
 const MockAuthContext = createContext();
 
 export const MockAuthProvider = ({ children }) => {
-  // ⚠️ IMPORTANTE: User ID real do banco (do Supabase Authentication)
-  // Este ID deve corresponder ao president_id do baba no banco
+  // ✅ ID REAL DO SEU USUÁRIO (existe em auth.users e profiles)
   const user = {
-    id: 'e83cdb27-0040-44d1-b998-ac8d879f2b24', // ⭐ USER_ID REAL DO BANCO
+    id: 'e83cdb27-0040-44d1-b998-ac8d879f2b24',
     email: 'zharickdiias@gmail.com',
   };
 
+  // ✅ profile usa os campos REAIS da tabela profiles:
+  // id, name, age, position, favorite_team (era heart_team), avatar_url, email
   const profile = {
-    id: 'e83cdb27-0040-44d1-b998-ac8d879f2b24', // ⭐ MESMO USER_ID
+    id: 'e83cdb27-0040-44d1-b998-ac8d879f2b24',
     name: 'Zharick Dias',
     email: 'zharickdiias@gmail.com',
     avatar_url: null,
@@ -21,10 +22,8 @@ export const MockAuthProvider = ({ children }) => {
     favorite_team: 'Flamengo',
   };
 
-  // Sempre autenticado
   const isAuthenticated = true;
 
-  // Função de logout simulada (não faz nada real)
   const signOut = () => {
     console.log('Mock SignOut - não implementado');
   };
